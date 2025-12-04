@@ -1,6 +1,7 @@
 package com.example.structurescan
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -59,13 +60,17 @@ data class DetailImageAssessment(
     val crackLowConf: Float = 0f,
     val crackModerateConf: Float = 0f,
     val crackHighConf: Float = 0f,
-    val paintLowConf: Float = 0f,
-    val paintModerateConf: Float = 0f,
-    val paintHighConf: Float = 0f,
-    val algaeLowConf: Float = 0f,
-    val algaeModerateConf: Float = 0f,
-    val algaeHighConf: Float = 0f,
-    val plainConf: Float = 0f
+    val paintConf: Float = 0f,
+    val algaeConf: Float = 0f,
+    val plainConf: Float = 0f,
+    val recommendations: List<DetailRecommendation> = emptyList()  // ✅ ADD THIS
+)
+
+data class DetailRecommendation(
+    val title: String = "",
+    val description: String = "",
+    val severity: String = "",
+    val actions: List<String> = emptyList()
 )
 
 class AssessmentDetailsActivity : ComponentActivity() {
@@ -142,12 +147,8 @@ class AssessmentDetailsActivity : ComponentActivity() {
         val crackHigh = intent.getIntExtra("CRACK_HIGH", 0)
         val crackModerate = intent.getIntExtra("CRACK_MODERATE", 0)
         val crackLow = intent.getIntExtra("CRACK_LOW", 0)
-        val paintHigh = intent.getIntExtra("PAINT_HIGH", 0)
-        val paintModerate = intent.getIntExtra("PAINT_MODERATE", 0)
-        val paintLow = intent.getIntExtra("PAINT_LOW", 0)
-        val algaeHigh = intent.getIntExtra("ALGAE_HIGH", 0)
-        val algaeModerate = intent.getIntExtra("ALGAE_MODERATE", 0)
-        val algaeLow = intent.getIntExtra("ALGAE_LOW", 0)
+        val paintCount = intent.getIntExtra("PAINT_COUNT", 0)    // ✅
+        val algaeCount = intent.getIntExtra("ALGAE_COUNT", 0)    // ✅
 
         val buildingType = intent.getStringExtra("BUILDING_TYPE") ?: ""
         val constructionYear = intent.getStringExtra("CONSTRUCTION_YEAR") ?: ""
@@ -217,12 +218,8 @@ class AssessmentDetailsActivity : ComponentActivity() {
                     crackHigh = crackHigh,
                     crackModerate = crackModerate,
                     crackLow = crackLow,
-                    paintHigh = paintHigh,
-                    paintModerate = paintModerate,
-                    paintLow = paintLow,
-                    algaeHigh = algaeHigh,
-                    algaeModerate = algaeModerate,
-                    algaeLow = algaeLow,
+                    paintCount = paintCount,    // ✅ Single merged count
+                    algaeCount = algaeCount,
                     buildingType = currentBuildingType.value,
                     constructionYear = currentConstructionYear.value,
                     renovationYear = currentRenovationYear.value,
@@ -261,34 +258,102 @@ class AssessmentDetailsActivity : ComponentActivity() {
     private fun getRecommendation(damageType: String, damageLevel: String): DamageRecommendation {
         val key = "$damageType-$damageLevel"
         return when (key) {
-            "Crack-High" -> DamageRecommendation(
-                title = "Structural Crack",
-                description = "Vertical crack in foundation area indicating possible settlement.",
+            // ✅ UPDATED: Spalling (was Crack-High)
+            "Spalling-High" -> DamageRecommendation(
+                title = "Critical Structural Spalling",
+                description = "Severe concrete spalling indicating possible structural deterioration or rebar exposure.",
                 severity = "HIGH",
-                actions = listOf("Consult structural engineer within 30 days", "Monitor crack progression weekly"),
+                actions = listOf(
+                    "Consult licensed structural engineer immediately",
+                    "Monitor spalling progression weekly",
+                    "Avoid loading affected areas",
+                    "Check for exposed reinforcement bars",
+                    "Document with photos for comparison"
+                ),
                 severityColor = Color(0xFFD32F2F),
                 severityBgColor = Color(0xFFFFEBEE)
             )
-            "Crack-Moderate" -> DamageRecommendation(
-                title = "Thermal Cracking",
-                description = "Hairline cracks from thermal expansion.",
-                severity = "MODERATE",
-                actions = listOf("Monitor during seasonal changes", "Seal cracks to prevent water infiltration"),
-                severityColor = Color(0xFFF57C00),
-                severityBgColor = Color(0xFFFFF3E0)
+
+            // ✅ UPDATED: Major Crack (was Crack-Moderate)
+            "Major Crack-High" -> DamageRecommendation(
+                title = "Major Structural Crack",
+                description = "Significant cracking from foundation settlement or structural stress requiring immediate attention.",
+                severity = "HIGH",
+                actions = listOf(
+                    "Consult structural engineer within 7 days",
+                    "Monitor crack width and progression",
+                    "Seal cracks to prevent water infiltration",
+                    "Schedule professional inspection",
+                    "Check for underlying moisture issues"
+                ),
+                severityColor = Color(0xFFD32F2F),
+                severityBgColor = Color(0xFFFFEBEE)
             )
-            else -> DamageRecommendation(
-                title = "General Issue",
-                description = "Surface condition requires attention.",
+
+            // ✅ UPDATED: Minor Crack (was Crack-Low)
+            "Minor Crack-Low" -> DamageRecommendation(
+                title = "Minor Surface Cracking",
+                description = "Hairline cracks consistent with normal aging and minor settlement.",
+                severity = "LOW",
+                actions = listOf(
+                    "Include in routine maintenance inspections",
+                    "Monitor for any expansion over time",
+                    "Seal surface cracks during next maintenance cycle",
+                    "No immediate structural concern"
+                ),
+                severityColor = Color(0xFF388E3C),
+                severityBgColor = Color(0xFFE8F5E9)
+            )
+
+            // ✅ UPDATED: Paint Damage (was Paint-Detected, now LOW risk)
+            "Paint Damage-Low" -> DamageRecommendation(
+                title = "Paint Surface Deterioration",
+                description = "Minor paint damage requiring cosmetic maintenance.",
+                severity = "LOW",
+                actions = listOf(
+                    "Schedule repainting during next maintenance",
+                    "Check for minor moisture underneath",
+                    "Clean and prepare surface before repainting",
+                    "Use weather-resistant paint for exterior",
+                    "No structural concern"
+                ),
+                severityColor = Color(0xFF388E3C),
+                severityBgColor = Color(0xFFE8F5E9)
+            )
+
+            // ✅ UPDATED: Algae (still MODERATE risk)
+            "Algae-Moderate" -> DamageRecommendation(
+                title = "Algae/Moss Growth",
+                description = "Biological growth indicating moisture presence and potential drainage issues.",
                 severity = "MODERATE",
-                actions = listOf("Inspect affected area", "Schedule professional assessment"),
+                actions = listOf(
+                    "Clean with appropriate biocide solution",
+                    "Identify and fix moisture source",
+                    "Improve drainage around affected area",
+                    "Trim vegetation to increase sunlight exposure",
+                    "Apply anti-algae treatment after cleaning"
+                ),
+                severityColor = Color(0xFFF57C00),
+                severityBgColor = Color(0xFFF3E0)
+            )
+
+            // ✅ Default fallback
+            else -> DamageRecommendation(
+                title = "General Maintenance Required",
+                description = "Area requires attention and regular monitoring.",
+                severity = "MODERATE",
+                actions = listOf(
+                    "Conduct detailed visual inspection",
+                    "Address any moisture issues",
+                    "Schedule professional assessment if needed",
+                    "Document condition for future reference"
+                ),
                 severityColor = Color(0xFFF57C00),
                 severityBgColor = Color(0xFFFFF3E0)
             )
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssessmentDetailsScreen(
@@ -300,12 +365,8 @@ fun AssessmentDetailsScreen(
     crackHigh: Int,
     crackModerate: Int,
     crackLow: Int,
-    paintHigh: Int,
-    paintModerate: Int,
-    paintLow: Int,
-    algaeHigh: Int,
-    algaeModerate: Int,
-    algaeLow: Int,
+    paintCount: Int,      // ✅ Single merged count
+    algaeCount: Int,      // ✅ Single merged count
     buildingType: String = "",
     constructionYear: String = "",
     renovationYear: String = "",
@@ -347,27 +408,59 @@ fun AssessmentDetailsScreen(
                         val assessmentsList = document.get("assessments") as? List<HashMap<String, Any>>
                         if (assessmentsList != null) {
                             imageAssessments = assessmentsList.map { assessmentMap ->
-                                // Parse detectedIssues array
-                                val detectedIssuesRaw = assessmentMap["detectedIssues"] as? List<HashMap<String, Any>>
-                                val detectedIssues = detectedIssuesRaw?.map { issueMap ->
-                                    DetailDetectedIssue(
-                                        damageType = issueMap["type"] as? String ?: "Unknown",
-                                        damageLevel = issueMap["level"] as? String ?: "Low",
-                                        confidence = (issueMap["confidence"] as? Number)?.toFloat() ?: 0f
-                                    )
+                                // ✅ CRITICAL: Parse detectedIssues array properly
+                                val detectedIssuesRaw = assessmentMap["detectedIssues"] as? List<*>
+                                val detectedIssues = detectedIssuesRaw?.mapNotNull { issueItem ->
+                                    if (issueItem is Map<*, *>) {
+                                        DetailDetectedIssue(
+                                            damageType = issueItem["type"] as? String ?: "Unknown",
+                                            damageLevel = issueItem["level"] as? String ?: "Low",
+                                            confidence = (issueItem["confidence"] as? Number)?.toFloat() ?: 0f
+                                        )
+                                    } else {
+                                        null
+                                    }
+                                } ?: emptyList()
+
+                                // ✅ ADD THIS: Parse recommendations from Firestore
+                                val recsRaw = assessmentMap["recommendations"] as? List<*>
+                                val recs = recsRaw?.mapNotNull { recItem ->
+                                    if (recItem is Map<*, *>) {
+                                        DetailRecommendation(
+                                            title = recItem["title"] as? String ?: "",
+                                            description = recItem["description"] as? String ?: "",
+                                            severity = recItem["severity"] as? String ?: "",
+                                            actions = (recItem["actions"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                                        )
+                                    } else null
                                 } ?: emptyList()
 
                                 DetailImageAssessment(
                                     imageUrl = assessmentMap["imageUri"] as? String ?: "",
-                                    detectedIssues = detectedIssues,
+                                    detectedIssues = detectedIssues,  // ✅ NOW contains ALL issues!
                                     imageRisk = assessmentMap["imageRisk"] as? String ?: "Low",
-                                    plainConf = (assessmentMap["plainConf"] as? Number)?.toFloat() ?: 0f  // ✅ NEW: Parse plain confidence
+                                    crackLowConf = (assessmentMap["crackLowConf"] as? Number)?.toFloat() ?: 0f,
+                                    crackModerateConf = (assessmentMap["crackModerateConf"] as? Number)?.toFloat() ?: 0f,
+                                    crackHighConf = (assessmentMap["crackHighConf"] as? Number)?.toFloat() ?: 0f,
+                                    paintConf = (assessmentMap["paintConf"] as? Number)?.toFloat() ?: 0f,
+                                    algaeConf = (assessmentMap["algaeConf"] as? Number)?.toFloat() ?: 0f,
+                                    plainConf = (assessmentMap["plainConf"] as? Number)?.toFloat() ?: 0f,
+                                    recommendations = recs  // ✅ ADD THIS
                                 )
+                            }
+
+                            Log.d("AssessmentDetails", "Loaded ${imageAssessments.size} images")
+                            imageAssessments.forEachIndexed { idx, img ->
+                                Log.d("AssessmentDetails", "Image $idx has ${img.detectedIssues.size} issues")
+                                img.detectedIssues.forEach { issue ->
+                                    Log.d("AssessmentDetails", "  - ${issue.damageType}-${issue.damageLevel} @ ${issue.confidence}")
+                                }
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
+                Log.e("AssessmentDetails", "Error loading images", e)
                 e.printStackTrace()
             } finally {
                 isLoadingImages = false
@@ -621,17 +714,45 @@ fun AssessmentDetailsScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    if (crackHigh + crackModerate + crackLow > 0) {
-                        DetailsSummaryRow("Crack Damage:", "High: $crackHigh  Mod: $crackModerate  Low: $crackLow")
+
+                    // ✅ FIX: Calculate counts from loaded imageAssessments
+                    val allDetectedIssues = imageAssessments.flatMap { it.detectedIssues }
+                    val spallingCount = allDetectedIssues.count { it.damageType == "Spalling" }
+                    val majorCrackCount = allDetectedIssues.count { it.damageType == "Major Crack" }
+                    val minorCrackCount = allDetectedIssues.count { it.damageType == "Minor Crack" }
+                    val paintDamageCount = allDetectedIssues.count { it.damageType == "Paint Damage" }
+                    val algaeDetectedCount = allDetectedIssues.count { it.damageType == "Algae" }
+
+                    var anyLine = false
+
+                    // ✅ UPDATED: Display new damage type names
+                    if (spallingCount > 0) {
+                        DetailsSummaryRow("Spalling", "$spallingCount location(s) - High Risk")
+                        anyLine = true
                     }
-                    if (paintHigh + paintModerate + paintLow > 0) {
-                        DetailsSummaryRow("Paint Damage:", "High: $paintHigh  Mod: $paintModerate  Low: $paintLow")
+                    if (majorCrackCount > 0) {
+                        DetailsSummaryRow("Major Crack", "$majorCrackCount location(s) - High Risk")
+                        anyLine = true
                     }
-                    if (algaeHigh + algaeModerate + algaeLow > 0) {
-                        DetailsSummaryRow("Algae/Moss:", "High: $algaeHigh  Mod: $algaeModerate  Low: $algaeLow")
+                    if (minorCrackCount > 0) {
+                        DetailsSummaryRow("Minor Crack", "$minorCrackCount location(s) - Low Risk")
+                        anyLine = true
+                    }
+                    if (paintDamageCount > 0) {
+                        DetailsSummaryRow("Paint Damage", "$paintDamageCount location(s) - Low Risk")
+                        anyLine = true
+                    }
+                    if (algaeDetectedCount > 0) {
+                        DetailsSummaryRow("Algae/Moss", "$algaeDetectedCount location(s) - Moderate Risk")
+                        anyLine = true
+                    }
+
+                    if (!anyLine) {
+                        DetailsSummaryRow("Overall", "No visible damage detected")
                     }
                 }
             }
+
             Spacer(Modifier.height(20.dp))
 
             DetailsExpandableSection(
@@ -647,6 +768,8 @@ fun AssessmentDetailsScreen(
                 }
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                    // Confidence legend (unchanged)
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
@@ -694,18 +817,53 @@ fun AssessmentDetailsScreen(
                             }
                         }
                     }
+
                     Spacer(Modifier.height(4.dp))
 
-                    if (crackHigh > 0) {
-                        val rec = getRecommendation("Crack", "High")
-                        DetailsRecommendationCard(rec, 0.85f, "High")
-                    }
-                    if (crackModerate > 0) {
-                        val rec = getRecommendation("Crack", "Moderate")
-                        DetailsRecommendationCard(rec, 0.9f, "Moderate")
+                    // ✅ ALSO FIX: The Recommendations section needs to handle ALL issues properly
+                    // Replace the Recommendations section content with:
+
+                    val allIssues = imageAssessments.flatMap { it.detectedIssues }
+
+                    Log.d("AssessmentDetails", "Total issues across all images: ${allIssues.size}")
+
+                    if (allIssues.isEmpty()) {
+                        DetailsRecommendationCard(
+                            rec = DamageRecommendation(
+                                title = "No Significant Issues",
+                                description = "This structure appears to be in good condition.",
+                                severity = "GOOD",
+                                actions = listOf(
+                                    "Continue regular maintenance",
+                                    "Include in routine inspections"
+                                ),
+                                severityColor = Color(0xFF388E3C),
+                                severityBgColor = Color(0xFFE8F5E9)
+                            ),
+                            confidence = 1.0f,
+                            damageLevel = "Low"
+                        )
+                    } else {
+                        // ✅ Group by damage type AND level to show each unique issue type once
+                        val grouped = allIssues.groupBy { "${it.damageType}-${it.damageLevel}" }
+
+                        grouped.forEach { (key, issuesList) ->
+                            Log.d("AssessmentDetails", "Group: $key has ${issuesList.size} occurrences")
+
+                            val first = issuesList.first()
+                            val avgConf = issuesList.map { it.confidence }.average().toFloat()
+                            val rec = getRecommendation(first.damageType, first.damageLevel)
+
+                            DetailsRecommendationCard(
+                                rec = rec,
+                                confidence = avgConf,
+                                damageLevel = first.damageLevel
+                            )
+                        }
                     }
                 }
             }
+
             Spacer(Modifier.height(20.dp))
 
             DetailsExpandableSection(
@@ -819,12 +977,8 @@ fun AssessmentDetailsScreen(
                             crackHighCount = crackHigh,
                             crackModerateCount = crackModerate,
                             crackLowCount = crackLow,
-                            paintHighCount = paintHigh,
-                            paintModerateCount = paintModerate,
-                            paintLowCount = paintLow,
-                            algaeHighCount = algaeHigh,
-                            algaeModerateCount = algaeModerate,
-                            algaeLowCount = algaeLow,
+                            paintCount = paintCount,  // ✅ FIXED: Single merged count
+                            algaeCount = algaeCount,  // ✅ FIXED: Single merged count
                             buildingType = buildingType,
                             constructionYear = constructionYear,
                             renovationYear = renovationYear,
@@ -838,6 +992,7 @@ fun AssessmentDetailsScreen(
                             notes = notes,
                             imageUrls = imageUrls
                         )
+
                         val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
                         if (pdfPath != null) {
                             Toast.makeText(context, "✓ PDF saved!", Toast.LENGTH_LONG).show()
@@ -947,20 +1102,23 @@ fun DetailsAnalyzedImageCard(imageNumber: Int, assessment: DetailImageAssessment
     val isPlainSurface = assessment.plainConf > 0.30f
 
     val riskColor = when {
-        isPlainSurface -> Color(0xFFE8F5E9)  // ✅ NEW: Green for plain
+        isPlainSurface -> Color(0xFFE8F5E9)
         assessment.imageRisk == "High" -> Color(0xFFFFEBEE)
         assessment.imageRisk == "Moderate" -> Color(0xFFFFF3E0)
-        assessment.imageRisk == "Low" -> Color(0xFFE8F5E9)
-        assessment.imageRisk == "None" -> Color(0xFFE8F5E9)  // ✅ NEW: Handle "None" risk
+        //assessment.detectedIssues.any { it.damageType == "Algae" } -> Color(0xFFFFF3E0)  // Keep yellow for Algae
+        assessment.imageRisk == "Low" -> Color(0xFFE8F5E9)  // Paint Damage will be green
+        assessment.imageRisk == "None" -> Color(0xFFE8F5E9)
         else -> Color(0xFFF5F5F5)
     }
 
     val badgeColor = when {
-        isPlainSurface -> Color(0xFF2E7D32)  // ✅ NEW: Green badge for plain
+        isPlainSurface -> Color(0xFF2E7D32)
         assessment.imageRisk == "High" -> Color(0xFFD32F2F)
         assessment.imageRisk == "Moderate" -> Color(0xFFF57C00)
+        // ✅ UPDATED: Check for new damage type names
+        //assessment.detectedIssues.any { it.damageType == "Paint Damage" || it.damageType == "Algae" } -> Color(0xFFF57C00)
         assessment.imageRisk == "Low" -> Color(0xFF388E3C)
-        assessment.imageRisk == "None" -> Color(0xFF2E7D32)  // ✅ NEW
+        assessment.imageRisk == "None" -> Color(0xFF2E7D32)
         else -> Color.Gray
     }
 
@@ -1121,7 +1279,7 @@ fun DetailsAnalyzedImageCard(imageNumber: Int, assessment: DetailImageAssessment
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
-                                    "${issue.damageType} Damage",
+                                    "${issue.damageType}",  // ✅ Will show "Spalling", "Major Crack", "Minor Crack", "Paint Damage", "Algae"
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color.Black
@@ -1185,27 +1343,6 @@ fun DetailsFullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
                 contentScale = ContentScale.Fit
             )
         }
-    }
-}
-
-@Composable
-fun DetailsBuildingInfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, fontSize = 13.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-        Text(
-            value,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.Black,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1.5f)
-        )
     }
 }
 
@@ -1401,12 +1538,8 @@ fun AssessmentDetailsPreview() {
             crackHigh = 1,
             crackModerate = 1,
             crackLow = 0,
-            paintHigh = 0,
-            paintModerate = 0,
-            paintLow = 0,
-            algaeHigh = 0,
-            algaeModerate = 0,
-            algaeLow = 0,
+            paintCount = 0,    // ✅ Single count
+            algaeCount = 0,    // ✅ Single count
             buildingType = "Residential",
             constructionYear = "2013",
             renovationYear = "2014",

@@ -71,15 +71,15 @@ data class ImageAssessment(
     val damageType: String,
     val damageLevel: String,
     val confidence: Float,
+    // ✅ Crack damage keeps its severity levels (Low, Moderate, High)
     val crackLowConf: Float,
     val crackModerateConf: Float,
     val crackHighConf: Float,
-    val paintLowConf: Float,
-    val paintModerateConf: Float,
-    val paintHighConf: Float,
-    val algaeLowConf: Float = 0f,
-    val algaeModerateConf: Float = 0f,
-    val algaeHighConf: Float = 0f,
+    // ✅ Paint is now merged - single confidence value
+    val paintConf: Float = 0f,
+    // ✅ Algae is now merged - single confidence value
+    val algaeConf: Float = 0f,
+    // ✅ Plain surface detection
     val plainConf: Float = 0f,
     val firebaseImageUrl: String = "",
     val detectedIssues: List<DetectedIssue> = emptyList(),
@@ -89,15 +89,14 @@ data class ImageAssessment(
 data class AssessmentSummary(
     val overallRisk: String,
     val totalIssues: Int,
+    // ✅ Crack damage keeps its severity level counts
     val crackHighCount: Int,
     val crackModerateCount: Int,
     val crackLowCount: Int,
-    val paintHighCount: Int,
-    val paintModerateCount: Int,
-    val paintLowCount: Int,
-    val algaeHighCount: Int,
-    val algaeModerateCount: Int,
-    val algaeLowCount: Int,
+    // ✅ Paint is now merged - single count
+    val paintCount: Int,
+    // ✅ Algae is now merged - single count
+    val algaeCount: Int,
     val assessments: List<ImageAssessment>
 )
 
@@ -330,6 +329,7 @@ class AssessmentResultsActivity : ComponentActivity() {
                     }
                 }
 
+                // ✅ UPDATED: Simplified confidence fields for Paint/Algae
                 uploadedAssessments.add(hashMapOf(
                     "damageType" to assessment.damageType,
                     "damageLevel" to assessment.damageLevel,
@@ -337,13 +337,9 @@ class AssessmentResultsActivity : ComponentActivity() {
                     "crackLowConf" to assessment.crackLowConf,
                     "crackModerateConf" to assessment.crackModerateConf,
                     "crackHighConf" to assessment.crackHighConf,
-                    "paintLowConf" to assessment.paintLowConf,
-                    "paintModerateConf" to assessment.paintModerateConf,
-                    "paintHighConf" to assessment.paintHighConf,
-                    "algaeLowConf" to assessment.algaeLowConf,
-                    "algaeModerateConf" to assessment.algaeModerateConf,
-                    "algaeHighConf" to assessment.algaeHighConf,
-                    "plainConf" to assessment.plainConf,  // ✅ NEW: Added plain confidence
+                    "paintConf" to assessment.paintConf,        // ✅ Single merged value
+                    "algaeConf" to assessment.algaeConf,        // ✅ Single merged value
+                    "plainConf" to assessment.plainConf,
                     "imageUri" to firebaseImageUrl,
                     "localImageUri" to assessment.imageUri.toString(),
                     "detectedIssues" to assessment.detectedIssues.map {
@@ -354,6 +350,7 @@ class AssessmentResultsActivity : ComponentActivity() {
                 ))
             }
 
+            // ✅ UPDATED: Simplified summary counts for Paint/Algae
             val assessmentData = hashMapOf(
                 "assessmentId" to assessmentId,
                 "assessmentName" to assessmentName,
@@ -365,12 +362,8 @@ class AssessmentResultsActivity : ComponentActivity() {
                 "crackHighCount" to summary.crackHighCount,
                 "crackModerateCount" to summary.crackModerateCount,
                 "crackLowCount" to summary.crackLowCount,
-                "paintHighCount" to summary.paintHighCount,
-                "paintModerateCount" to summary.paintModerateCount,
-                "paintLowCount" to summary.paintLowCount,
-                "algaeHighCount" to summary.algaeHighCount,
-                "algaeModerateCount" to summary.algaeModerateCount,
-                "algaeLowCount" to summary.algaeLowCount,
+                "paintCount" to summary.paintCount,              // ✅ Single count
+                "algaeCount" to summary.algaeCount,              // ✅ Single count
                 "imageCount" to summary.assessments.size,
                 "buildingType" to buildingType,
                 "constructionYear" to constructionYear,
@@ -399,26 +392,98 @@ class AssessmentResultsActivity : ComponentActivity() {
     fun getRecommendation(damageType: String, damageLevel: String): DamageRecommendation {
         val key = "$damageType-$damageLevel"
         return when (key) {
-            "Crack-High" -> DamageRecommendation("Structural Crack", "Vertical crack in foundation area indicating possible settlement.", "HIGH",
-                listOf("Consult structural engineer within 30 days", "Monitor crack progression weekly"), Color(0xFFD32F2F), Color(0xFFFFEBEE))
-            "Crack-Moderate" -> DamageRecommendation("Thermal Cracking", "Hairline cracks from thermal expansion.", "MODERATE",
-                listOf("Monitor during seasonal changes", "Seal cracks to prevent water infiltration"), Color(0xFFF57C00), Color(0xFFFFF3E0))
-            "Crack-Low" -> DamageRecommendation("Surface Wear", "Minimal wear consistent with age.", "LOW",
-                listOf("Regular building maintenance", "Monitor for progression during routine inspections"), Color(0xFF388E3C), Color(0xFFE8F5E9))
-            "Paint-High" -> DamageRecommendation("Severe Paint Deterioration", "Extensive peeling; possible moisture issues.", "HIGH",
-                listOf("Check moisture/mold", "Strip to substrate", "Prime and repaint"), Color(0xFFD32F2F), Color(0xFFFFEBEE))
-            "Paint-Moderate" -> DamageRecommendation("Paint Damage", "Moderate peeling/flaking.", "MODERATE",
-                listOf("Scrape and clean", "Prime and repaint", "Investigate moisture source"), Color(0xFFF57C00), Color(0xFFFFF3E0))
-            "Paint-Low" -> DamageRecommendation("Minor Paint Wear", "Cosmetic wear.", "LOW",
-                listOf("Clean surface", "Touch-up paint as needed", "Schedule repainting during regular maintenance"), Color(0xFF388E3C), Color(0xFFE8F5E9))
-            "Algae-High" -> DamageRecommendation("Severe Algae/Moss", "Heavy growth indicating persistent moisture.", "HIGH",
-                listOf("Professional biocide cleaning", "Fix moisture source", "Improve drainage"), Color(0xFFD32F2F), Color(0xFFFFEBEE))
-            "Algae-Moderate" -> DamageRecommendation("Moderate Algae/Moss", "Visible growth in damp areas.", "MODERATE",
-                listOf("Clean affected areas", "Improve drainage", "Increase sunlight exposure"), Color(0xFFF57C00), Color(0xFFFFF3E0))
-            "Algae-Low" -> DamageRecommendation("Minor Algae/Moss", "Light growth in shaded areas.", "LOW",
-                listOf("Periodic cleaning", "Enhance air circulation", "Monitor growth patterns"), Color(0xFF388E3C), Color(0xFFE8F5E9))
-            else -> DamageRecommendation("General Surface Issue", "Condition requires attention.", "MODERATE",
-                listOf("Inspect closely", "Address moisture", "Schedule professional assessment"), Color(0xFFF57C00), Color(0xFFFFF3E0))
+            // ✅ UPDATED: Spalling (was Crack-High)
+            "Spalling-High" -> DamageRecommendation(
+                "Critical Structural Spalling",
+                "Severe concrete spalling indicating possible structural deterioration or rebar exposure.",
+                "HIGH",
+                listOf(
+                    "Consult licensed structural engineer immediately",
+                    "Monitor spalling progression weekly",
+                    "Avoid loading affected areas",
+                    "Check for exposed reinforcement bars",
+                    "Document with photos for comparison"
+                ),
+                Color(0xFFD32F2F),
+                Color(0xFFFFEBEE)
+            )
+
+            // ✅ UPDATED: Major Crack (was Crack-Moderate)
+            "Major Crack-High" -> DamageRecommendation(
+                "Major Structural Crack",
+                "Significant cracking from foundation settlement or structural stress requiring immediate attention.",
+                "HIGH",
+                listOf(
+                    "Consult structural engineer within 7 days",
+                    "Monitor crack width and progression",
+                    "Seal cracks to prevent water infiltration",
+                    "Schedule professional inspection",
+                    "Check for underlying moisture issues"
+                ),
+                Color(0xFFD32F2F),
+                Color(0xFFFFEBEE)
+            )
+
+            // ✅ UPDATED: Minor Crack (was Crack-Low)
+            "Minor Crack-Low" -> DamageRecommendation(
+                "Minor Surface Cracking",
+                "Hairline cracks consistent with normal aging and minor settlement.",
+                "LOW",
+                listOf(
+                    "Include in routine maintenance inspections",
+                    "Monitor for any expansion over time",
+                    "Seal surface cracks during next maintenance cycle",
+                    "No immediate structural concern"
+                ),
+                Color(0xFF388E3C),
+                Color(0xFFE8F5E9)
+            )
+
+            // ✅ UPDATED: Paint Damage (was Paint-Detected, now LOW risk)
+            "Paint Damage-Low" -> DamageRecommendation(
+                "Paint Surface Deterioration",
+                "Minor paint damage requiring cosmetic maintenance.",
+                "LOW",
+                listOf(
+                    "Schedule repainting during next maintenance",
+                    "Check for minor moisture underneath",
+                    "Clean and prepare surface before repainting",
+                    "Use weather-resistant paint for exterior",
+                    "No structural concern"
+                ),
+                Color(0xFF388E3C),
+                Color(0xFFE8F5E9)
+            )
+
+            // ✅ UPDATED: Algae (still MODERATE risk)
+            "Algae-Moderate" -> DamageRecommendation(
+                "Algae/Moss Growth",
+                "Biological growth indicating moisture presence and potential drainage issues.",
+                "MODERATE",
+                listOf(
+                    "Clean with appropriate biocide solution",
+                    "Identify and fix moisture source",
+                    "Improve drainage around affected area",
+                    "Trim vegetation to increase sunlight exposure",
+                    "Apply anti-algae treatment after cleaning"
+                ),
+                Color(0xFFF57C00),
+                Color(0xFFFFF3E0)
+            )
+
+            else -> DamageRecommendation(
+                "General Maintenance Required",
+                "Area requires attention and regular monitoring.",
+                "MODERATE",
+                listOf(
+                    "Conduct detailed visual inspection",
+                    "Address any moisture issues",
+                    "Schedule professional assessment if needed",
+                    "Document condition for future reference"
+                ),
+                Color(0xFFF57C00),
+                Color(0xFFFFF3E0)
+            )
         }
     }
 }
@@ -483,15 +548,6 @@ fun AssessmentResultsScreen(
         }
     }
 
-    // FIXED: When values are equal, always prefer higher severity
-    fun selectLevelFromConfidences(low: Float, moderate: Float, high: Float): Pair<String, Float> {
-        return when {
-            high >= moderate && high >= low -> "High" to high
-            moderate >= low -> "Moderate" to moderate
-            else -> "Low" to low
-        }
-    }
-
     fun analyzeImageWithTensorFlow(imageUri: Uri): ImageAssessment? {
         return try {
             val inputStream = context.contentResolver.openInputStream(imageUri)
@@ -518,50 +574,61 @@ fun AssessmentResultsScreen(
             val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 224, 224, 3), DataType.FLOAT32)
             inputFeature0.loadBuffer(byteBuffer)
             val confidences = model.process(inputFeature0).outputFeature0AsTensorBuffer.floatArray
+            // ✅ ADD THIS DEBUG LOG
+            Log.d("ModelDebug", "Raw confidences: ${confidences.joinToString()}")
+            Log.d("ModelDebug", "Crack High: ${confidences[0]}, Crack Mod: ${confidences[1]}, Crack Low: ${confidences[2]}")
+            Log.d("ModelDebug", "Paint: ${confidences[3]}, Algae: ${confidences[4]}, Plain: ${confidences[5]}")
 
-            val algaeHigh = confidences.getOrNull(0) ?: 0f
-            val algaeLow = confidences.getOrNull(1) ?: 0f
-            val algaeMod = confidences.getOrNull(2) ?: 0f
-            val crackHigh = confidences.getOrNull(3) ?: 0f
-            val crackLow = confidences.getOrNull(4) ?: 0f
-            val crackMod = confidences.getOrNull(5) ?: 0f
-            val paintHigh = confidences.getOrNull(6) ?: 0f
-            val paintLow = confidences.getOrNull(7) ?: 0f
-            val paintMod = confidences.getOrNull(8) ?: 0f
-            val plainConf = confidences.getOrNull(9) ?: 0f  // ✅ NEW: Plain class
+
+            // ✅ FIXED: Correct mapping based on YOUR Teachable Machine class order
+            val crackHigh = confidences.getOrNull(0) ?: 0f      // Index 0: Crack High Risk
+            val crackMod = confidences.getOrNull(1) ?: 0f       // Index 1: Crack Moderate Risk
+            val crackLow = confidences.getOrNull(2) ?: 0f       // Index 2: Crack Low Risk
+            val paintConf = confidences.getOrNull(3) ?: 0f      // Index 3: Paint Risk Issue
+            val algaeConf = confidences.getOrNull(4) ?: 0f      // Index 4: Algae / Moss Issue
+            val plainConf = confidences.getOrNull(5) ?: 0f      // Index 5: Plain
 
             val maxIndex = confidences.indices.maxByOrNull { confidences[it] } ?: 0
             val maxConfidence = confidences.getOrNull(maxIndex) ?: 0f
 
-            // ✅ MODIFIED: Handle Plain class in primary damage detection
+            // ✅ FIXED: Primary damage mapping matches your class order
             val (primaryDamageType, primaryDamageLevel) = when (maxIndex) {
-                0 -> "Algae" to "High"; 1 -> "Algae" to "Low"; 2 -> "Algae" to "Moderate"
-                3 -> "Crack" to "High"; 4 -> "Crack" to "Low"; 5 -> "Crack" to "Moderate"
-                6 -> "Paint" to "High"; 7 -> "Paint" to "Low"; 8 -> "Paint" to "Moderate"
-                9 -> "Plain" to "None"  // ✅ NEW: Plain surface detected
-                else -> "Plain" to "None"  // ✅ CHANGED: Default to Plain instead of Crack-Low
+                0 -> "Spalling" to "High"              // Crack High Risk
+                1 -> "Major Crack" to "High"          // Crack Moderate Risk
+                2 -> "Minor Crack" to "Low"               // Crack Low Risk
+                3 -> "Paint Damage" to "Low"          // Paint Risk Issue
+                4 -> "Algae" to "Moderate"          // Algae / Moss Issue
+                5 -> "Plain" to "None"              // Plain
+                else -> "Plain" to "None"
             }
-
+            // ✅ FIXED: Detect all issues independently, don't let Plain block them
             val detectedIssuesMutable = mutableListOf<DetectedIssue>()
 
-            // ✅ MODIFIED: Only detect damage issues if Plain confidence is LOW
-            if (plainConf <= SHOW_THRESHOLD) {
-                val (algaeLevel, algaeBest) = selectLevelFromConfidences(algaeLow, algaeMod, algaeHigh)
-                if (algaeBest > SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Algae", algaeLevel, algaeBest))
-
-                val (crackLevel, crackBest) = selectLevelFromConfidences(crackLow, crackMod, crackHigh)
-                if (crackBest > SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Crack", crackLevel, crackBest))
-
-                val (paintLevel, paintBest) = selectLevelFromConfidences(paintLow, paintMod, paintHigh)
-                if (paintBest > SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Paint", paintLevel, paintBest))
+            // Check ALL damage types independently (no Plain blocking)
+            if (crackHigh > SHOW_THRESHOLD) {
+                detectedIssuesMutable.add(DetectedIssue("Spalling", "High", crackHigh))
+            }
+            if (crackMod > SHOW_THRESHOLD) {
+                detectedIssuesMutable.add(DetectedIssue("Major Crack", "High", crackMod))
+            }
+            if (crackLow > SHOW_THRESHOLD) {
+                detectedIssuesMutable.add(DetectedIssue("Minor Crack", "Low", crackLow))
+            }
+            if (paintConf > SHOW_THRESHOLD) {
+                detectedIssuesMutable.add(DetectedIssue("Paint Damage", "Low", paintConf))
+            }
+            if (algaeConf > SHOW_THRESHOLD) {
+                detectedIssuesMutable.add(DetectedIssue("Algae", "Moderate", algaeConf))
             }
 
-            // ✅ MODIFIED: Prioritize actual damage over plain surfaces
+            // ✅ Risk calculation based on what was actually detected
             val imageRisk = when {
-                detectedIssuesMutable.any { it.damageLevel == "High" } -> "High"
-                detectedIssuesMutable.any { it.damageLevel == "Moderate" } -> "Moderate"
+                detectedIssuesMutable.any { it.damageType == "Spalling" && it.damageLevel == "High" } -> "High"
+                detectedIssuesMutable.any { it.damageType == "Major Crack" && it.damageLevel == "High" } -> "High"
+                detectedIssuesMutable.any { it.damageType == "Algae" } -> "Moderate"
+                detectedIssuesMutable.any { it.damageType == "Minor Crack" || it.damageType == "Paint Damage" } -> "Low"
                 detectedIssuesMutable.isNotEmpty() -> "Low"
-                plainConf > SHOW_THRESHOLD -> "None"  // ✅ NEW: Explicitly mark as no risk
+                plainConf > SHOW_THRESHOLD -> "None"  // ✅ Only mark as "None" if truly plain AND no issues
                 else -> "Low"
             }
 
@@ -569,22 +636,27 @@ fun AssessmentResultsScreen(
             originalBitmap.recycle()
             resizedBitmap.recycle()
 
-            // ✅ CORRECT ORDER: Match the data class parameter order
+            // ✅ Return ImageAssessment with correct confidence values
             ImageAssessment(
                 imageUri = imageUri,
-                damageType = primaryDamageType, damageLevel = primaryDamageLevel, confidence = maxConfidence,
-                crackLowConf = crackLow, crackModerateConf = crackMod, crackHighConf = crackHigh,
-                paintLowConf = paintLow, paintModerateConf = paintMod, paintHighConf = paintHigh, algaeLowConf = algaeLow, algaeModerateConf = algaeMod,
-                algaeHighConf = algaeHigh, firebaseImageUrl = "",
-                detectedIssues = detectedIssuesMutable.toList(), imageRisk = imageRisk,
-                plainConf = plainConf  // ✅ NEW: Added plain confidence
+                damageType = primaryDamageType,
+                damageLevel = primaryDamageLevel,
+                confidence = maxConfidence,
+                crackLowConf = crackLow,
+                crackModerateConf = crackMod,
+                crackHighConf = crackHigh,
+                paintConf = paintConf,
+                algaeConf = algaeConf,
+                plainConf = plainConf,
+                firebaseImageUrl = "",
+                detectedIssues = detectedIssuesMutable.toList(),
+                imageRisk = imageRisk
             )
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
     }
-
     // ✅ MODIFIED: Only run once on initial load
     LaunchedEffect(Unit) {
         if (capturedImages.isNotEmpty() && !isSavedToFirebase) {
@@ -597,8 +669,6 @@ fun AssessmentResultsScreen(
             yield()
             delay(500)  // Increased to 500ms for slower devices
 
-            Log.d("AssessmentResults", "Dialog should be visible now - starting analysis")
-
             try {
                 val imageAssessments = capturedImages.mapNotNull { analyzeImageWithTensorFlow(it) }
 
@@ -609,22 +679,21 @@ fun AssessmentResultsScreen(
                     isAnalyzing = false
                     isSaving = false
                 } else {
-                    var crackHighCount = 0; var crackModerateCount = 0; var crackLowCount = 0
-                    var paintHighCount = 0; var paintModerateCount = 0; var paintLowCount = 0
-                    var algaeHighCount = 0; var algaeModerateCount = 0; var algaeLowCount = 0
+                    // ✅ UPDATED: Count by new damage type names
+                    var spallingCount = 0
+                    var majorCrackCount = 0
+                    var minorCrackCount = 0
+                    var paintDamageCount = 0
+                    var algaeCount = 0
 
                     imageAssessments.forEach { ia ->
                         ia.detectedIssues.forEach { issue ->
                             when (issue.damageType) {
-                                "Crack" -> when (issue.damageLevel) {
-                                    "High" -> crackHighCount++; "Moderate" -> crackModerateCount++; else -> crackLowCount++
-                                }
-                                "Paint" -> when (issue.damageLevel) {
-                                    "High" -> paintHighCount++; "Moderate" -> paintModerateCount++; else -> paintLowCount++
-                                }
-                                "Algae" -> when (issue.damageLevel) {
-                                    "High" -> algaeHighCount++; "Moderate" -> algaeModerateCount++; else -> algaeLowCount++
-                                }
+                                "Spalling" -> spallingCount++
+                                "Major Crack" -> majorCrackCount++
+                                "Minor Crack" -> minorCrackCount++
+                                "Paint Damage" -> paintDamageCount++
+                                "Algae" -> algaeCount++
                             }
                         }
                     }
@@ -636,14 +705,21 @@ fun AssessmentResultsScreen(
                         else -> "Low Risk"
                     }
 
-                    val totalIssues = crackHighCount + crackModerateCount + crackLowCount +
-                            paintHighCount + paintModerateCount + paintLowCount +
-                            algaeHighCount + algaeModerateCount + algaeLowCount
+                    // ✅ UPDATED: Simplified total issues calculation
+                    val totalIssues = spallingCount + majorCrackCount + minorCrackCount +
+                            paintDamageCount + algaeCount
 
-                    val summary = AssessmentSummary(overallRisk, totalIssues,
-                        crackHighCount, crackModerateCount, crackLowCount,
-                        paintHighCount, paintModerateCount, paintLowCount,
-                        algaeHighCount, algaeModerateCount, algaeLowCount, imageAssessments)
+                    // ✅ UPDATED: Use simplified AssessmentSummary constructor
+                    val summary = AssessmentSummary(
+                        overallRisk,
+                        totalIssues,
+                        spallingCount,      // Maps to crackHighCount
+                        majorCrackCount,    // Maps to crackModerateCount
+                        minorCrackCount,    // Maps to crackLowCount
+                        paintDamageCount,   // Maps to paintCount
+                        algaeCount,         // Maps to algaeCount
+                        imageAssessments
+                    )
 
                     isAnalyzing = false
                     // Keep isSaving = true during Firebase save
@@ -894,12 +970,50 @@ fun AssessmentResultsScreen(
 
                         Spacer(Modifier.height(20.dp))
 
-                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                        ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("Detection Summary", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
-                                if (summary.crackHighCount + summary.crackModerateCount + summary.crackLowCount > 0) SummaryRow("Crack Damage:", "High: ${summary.crackHighCount}  Mod: ${summary.crackModerateCount}  Low: ${summary.crackLowCount}")
-                                if (summary.paintHighCount + summary.paintModerateCount + summary.paintLowCount > 0) SummaryRow("Paint Damage:", "High: ${summary.paintHighCount}  Mod: ${summary.paintModerateCount}  Low: ${summary.paintLowCount}")
-                                if (summary.algaeHighCount + summary.algaeModerateCount + summary.algaeLowCount > 0) SummaryRow("Algae/Moss:", "High: ${summary.algaeHighCount}  Mod: ${summary.algaeModerateCount}  Low: ${summary.algaeLowCount}")
+                                Text(
+                                    "Detection Summary",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
+
+                                var anyLine = false
+
+                                // ✅ UPDATED: Display new damage type names
+                                if (summary.crackHighCount > 0) {  // Spalling
+                                    SummaryRow("Spalling:", "${summary.crackHighCount} location(s) - High Risk")
+                                    anyLine = true
+                                }
+
+                                if (summary.crackModerateCount > 0) {  // Major Crack
+                                    SummaryRow("Major Crack:", "${summary.crackModerateCount} location(s) - High Risk")
+                                    anyLine = true
+                                }
+
+                                if (summary.crackLowCount > 0) {  // Minor Crack
+                                    SummaryRow("Minor Crack:", "${summary.crackLowCount} location(s) - Low Risk")
+                                    anyLine = true
+                                }
+
+                                if (summary.paintCount > 0) {  // Paint Damage
+                                    SummaryRow("Paint Damage:", "${summary.paintCount} location(s) - Low Risk")
+                                    anyLine = true
+                                }
+
+                                if (summary.algaeCount > 0) {  // Algae
+                                    SummaryRow("Algae/Moss:", "${summary.algaeCount} location(s) - Moderate Risk")
+                                    anyLine = true
+                                }
+
+                                if (!anyLine) {
+                                    SummaryRow("Overall:", "No visible damage detected")
+                                }
                             }
                         }
 
@@ -1079,31 +1193,46 @@ fun AssessmentResultsScreen(
                                                     isAnalyzing = false
                                                     analysisError = "Failed to re-analyze images"
                                                 } else {
-                                                    var crackHigh = 0; var crackMod = 0; var crackLow = 0
-                                                    var paintHigh = 0; var paintMod = 0; var paintLow = 0
-                                                    var algaeHigh = 0; var algaeMod = 0; var algaeLow = 0
+                                                    // ✅ UPDATED: Count with new names
+                                                    var spallingCount = 0
+                                                    var majorCrackCount = 0
+                                                    var minorCrackCount = 0
+                                                    var paintDamageCount = 0
+                                                    var algaeCount = 0
+
                                                     imageAssessments.forEach { ia ->
                                                         ia.detectedIssues.forEach { issue ->
                                                             when (issue.damageType) {
-                                                                "Crack" -> when (issue.damageLevel) {
-                                                                    "High" -> crackHigh++; "Moderate" -> crackMod++; else -> crackLow++
-                                                                }
-                                                                "Paint" -> when (issue.damageLevel) {
-                                                                    "High" -> paintHigh++; "Moderate" -> paintMod++; else -> paintLow++
-                                                                }
-                                                                "Algae" -> when (issue.damageLevel) {
-                                                                    "High" -> algaeHigh++; "Moderate" -> algaeMod++; else -> algaeLow++
-                                                                }
+                                                                "Spalling" -> spallingCount++
+                                                                "Major Crack" -> majorCrackCount++
+                                                                "Minor Crack" -> minorCrackCount++
+                                                                "Paint Damage" -> paintDamageCount++
+                                                                "Algae" -> algaeCount++
                                                             }
                                                         }
                                                     }
+
                                                     val newRisk = when {
                                                         imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
                                                         imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
                                                         else -> "Low Risk"
                                                     }
-                                                    val totalIssues = crackHigh + crackMod + crackLow + paintHigh + paintMod + paintLow + algaeHigh + algaeMod + algaeLow
-                                                    val newSummary = AssessmentSummary(newRisk, totalIssues, crackHigh, crackMod, crackLow, paintHigh, paintMod, paintLow, algaeHigh, algaeMod, algaeLow, imageAssessments)
+
+                                                    val totalIssues = spallingCount + majorCrackCount + minorCrackCount +
+                                                            paintDamageCount + algaeCount
+
+                                                    // ✅ UPDATED: Use new constructor
+                                                    val newSummary = AssessmentSummary(
+                                                        newRisk,
+                                                        totalIssues,
+                                                        spallingCount,
+                                                        majorCrackCount,
+                                                        minorCrackCount,
+                                                        paintDamageCount,
+                                                        algaeCount,
+                                                        imageAssessments
+                                                    )
+
                                                     isAnalyzing = false
                                                     isSaving = true
                                                     val success = withContext(Dispatchers.IO) {
@@ -1111,7 +1240,7 @@ fun AssessmentResultsScreen(
                                                             assessmentName, newSummary, buildingType, constructionYear,
                                                             renovationYear, floors, material, foundation, environment,
                                                             previousIssues, occupancy, environmentalRisks, notes,
-                                                            isReanalysis = true  // ✅ THIS IS THE KEY!
+                                                            isReanalysis = true
                                                         )
                                                     }
                                                     isSaving = false
@@ -1178,16 +1307,20 @@ fun AssessmentResultsScreen(
                             crackHighCount = assessmentSummary?.crackHighCount ?: 0,
                             crackModerateCount = assessmentSummary?.crackModerateCount ?: 0,
                             crackLowCount = assessmentSummary?.crackLowCount ?: 0,
-                            paintHighCount = assessmentSummary?.paintHighCount ?: 0,
-                            paintModerateCount = assessmentSummary?.paintModerateCount ?: 0,
-                            paintLowCount = assessmentSummary?.paintLowCount ?: 0,
-                            algaeHighCount = assessmentSummary?.algaeHighCount ?: 0,
-                            algaeModerateCount = assessmentSummary?.algaeModerateCount ?: 0,
-                            algaeLowCount = assessmentSummary?.algaeLowCount ?: 0,
-                            buildingType = buildingType, constructionYear = constructionYear, renovationYear = renovationYear,
-                            floors = floors, material = material, foundation = foundation, environment = environment,
-                            previousIssues = previousIssues.joinToString(", "), occupancy = occupancy,
-                            environmentalRisks = environmentalRisks.joinToString(", "), notes = notes, imageUrls = localImageUris
+                            paintCount = assessmentSummary?.paintCount ?: 0,  // ✅ Single merged count
+                            algaeCount = assessmentSummary?.algaeCount ?: 0,  // ✅ Single merged count
+                            buildingType = buildingType,
+                            constructionYear = constructionYear,
+                            renovationYear = renovationYear,
+                            floors = floors,
+                            material = material,
+                            foundation = foundation,
+                            environment = environment,
+                            previousIssues = previousIssues.joinToString(", "),
+                            occupancy = occupancy,
+                            environmentalRisks = environmentalRisks.joinToString(", "),
+                            notes = notes,
+                            imageUrls = localImageUris
                         )
                         val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
                         if (pdfPath != null) {
@@ -1241,13 +1374,15 @@ fun AnalyzedImageCardV2(imageNumber: Int, assessment: ImageAssessment, onImageCl
     // ✅ MODIFIED: Check for Plain surfaces first, then determine level
     val imageOverallLevel = remember(issues, assessment.plainConf) {
         when {
-            assessment.plainConf > 0.30f -> "Plain"  // ✅ NEW: Plain surface detected
+            assessment.plainConf > 0.30f -> "Plain"
             issues.any { it.damageLevel == "High" } -> "High"
             issues.any { it.damageLevel == "Moderate" } -> "Moderate"
+            issues.any { it.damageType == "Paint" || it.damageType == "Algae" } -> "Moderate"  // ← ADD THIS
             issues.any { it.damageLevel == "Low" } -> "Low"
             else -> "Low"
         }
     }
+
 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(modifier = Modifier.size(80.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp)).clickable { onImageClick() }) {
@@ -1306,7 +1441,7 @@ fun AnalyzedImageCardV2(imageNumber: Int, assessment: ImageAssessment, onImageCl
                     // ✅ Show damage issues (existing logic)
                     issues.sortedByDescending { it.confidence }.forEach { issue ->
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text("${issue.damageType} Damage", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+                            Text(issue.damageType, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                             Spacer(Modifier.height(6.dp))
                             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 LinearProgressIndicator(

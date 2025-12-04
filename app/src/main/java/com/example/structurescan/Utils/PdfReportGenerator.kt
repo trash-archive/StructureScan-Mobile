@@ -22,15 +22,18 @@ data class PdfAssessmentData(
     val date: String,
     val overallRisk: String,
     val totalIssues: Int,
+
+    // ✅ Crack - KEEP the severity levels (High/Moderate/Low)
     val crackHighCount: Int,
     val crackModerateCount: Int,
     val crackLowCount: Int,
-    val paintHighCount: Int,
-    val paintModerateCount: Int,
-    val paintLowCount: Int,
-    val algaeHighCount: Int,
-    val algaeModerateCount: Int,
-    val algaeLowCount: Int,
+
+    // ✅ Paint - MERGE into single count (no severity levels)
+    val paintCount: Int,
+
+    // ✅ Algae - MERGE into single count (no severity levels)
+    val algaeCount: Int,
+
     val buildingType: String = "",
     val constructionYear: String = "",
     val renovationYear: String = "",
@@ -250,8 +253,9 @@ object PdfReportGenerator {
                 append("${data.totalIssues} areas of concern detected. ")
                 val details = mutableListOf<String>()
                 if (data.crackHighCount > 0) details.add("${data.crackHighCount} high-risk cracks")
-                if (data.paintHighCount > 0) details.add("${data.paintHighCount} high-risk paint damage")
-                if (data.algaeHighCount > 0) details.add("${data.algaeHighCount} high-risk algae/moss")
+                // ✅ FIXED: Use merged counts
+                if (data.paintCount > 0) details.add("${data.paintCount} paint damage areas")
+                if (data.algaeCount > 0) details.add("${data.algaeCount} algae/moss areas")
                 if (details.isNotEmpty()) append(details.joinToString(", ") + ".")
             } else {
                 append("No significant issues detected.")
@@ -346,6 +350,7 @@ object PdfReportGenerator {
             color = android.graphics.Color.BLACK
         }
 
+        // ✅ Crack - still has severity breakdown
         if (data.crackHighCount + data.crackModerateCount + data.crackLowCount > 0) {
             canvas.drawText("Crack Damage:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
@@ -355,27 +360,29 @@ object PdfReportGenerator {
             yPos += LINE_HEIGHT
         }
 
-        if (data.paintHighCount + data.paintModerateCount + data.paintLowCount > 0) {
+        // ✅ FIXED: Paint - single merged count
+        if (data.paintCount > 0) {
             canvas.drawText("Paint Damage:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
-                "High: ${data.paintHighCount}  Mod: ${data.paintModerateCount}  Low: ${data.paintLowCount}",
+                "Total: ${data.paintCount}",
                 (MARGIN + 200).toFloat(), yPos.toFloat(), paint
             )
             yPos += LINE_HEIGHT
         }
 
-        if (data.algaeHighCount + data.algaeModerateCount + data.algaeLowCount > 0) {
+        // ✅ FIXED: Algae - single merged count
+        if (data.algaeCount > 0) {
             canvas.drawText("Algae/Moss:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
-                "High: ${data.algaeHighCount}  Mod: ${data.algaeModerateCount}  Low: ${data.algaeLowCount}",
+                "Total: ${data.algaeCount}",
                 (MARGIN + 200).toFloat(), yPos.toFloat(), paint
             )
             yPos += LINE_HEIGHT
         }
 
         if (data.crackHighCount + data.crackModerateCount + data.crackLowCount == 0 &&
-            data.paintHighCount + data.paintModerateCount + data.paintLowCount == 0 &&
-            data.algaeHighCount + data.algaeModerateCount + data.algaeLowCount == 0) {
+            data.paintCount == 0 &&
+            data.algaeCount == 0) {
             canvas.drawText("No damage detected", MARGIN.toFloat(), yPos.toFloat(), paint)
             yPos += LINE_HEIGHT
         }
@@ -401,18 +408,16 @@ object PdfReportGenerator {
 
         val recommendations = mutableListOf<Triple<String, Int, String>>()
 
-        // ✅ FIXED: Now includes ALL levels (High, Moderate, AND Low)
+        // ✅ Crack recommendations - KEEP severity levels
         if (data.crackHighCount > 0) recommendations.add(Triple("Structural Crack (High Risk)", data.crackHighCount, "HIGH"))
         if (data.crackModerateCount > 0) recommendations.add(Triple("Thermal Cracking (Moderate Risk)", data.crackModerateCount, "MODERATE"))
         if (data.crackLowCount > 0) recommendations.add(Triple("Surface Wear (Low Risk)", data.crackLowCount, "LOW"))
 
-        if (data.paintHighCount > 0) recommendations.add(Triple("Severe Paint Deterioration (High Risk)", data.paintHighCount, "HIGH"))
-        if (data.paintModerateCount > 0) recommendations.add(Triple("Paint Damage (Moderate Risk)", data.paintModerateCount, "MODERATE"))
-        if (data.paintLowCount > 0) recommendations.add(Triple("Minor Paint Wear (Low Risk)", data.paintLowCount, "LOW"))
+        // ✅ FIXED: Paint recommendations - MERGED
+        if (data.paintCount > 0) recommendations.add(Triple("Paint Damage Issues", data.paintCount, "GENERAL"))
 
-        if (data.algaeHighCount > 0) recommendations.add(Triple("Severe Algae/Moss (High Risk)", data.algaeHighCount, "HIGH"))
-        if (data.algaeModerateCount > 0) recommendations.add(Triple("Moderate Algae/Moss", data.algaeModerateCount, "MODERATE"))
-        if (data.algaeLowCount > 0) recommendations.add(Triple("Minor Algae/Moss (Low Risk)", data.algaeLowCount, "LOW"))
+        // ✅ FIXED: Algae recommendations - MERGED
+        if (data.algaeCount > 0) recommendations.add(Triple("Algae/Moss Issues", data.algaeCount, "GENERAL"))
 
         if (recommendations.isEmpty()) {
             canvas.drawText("✓ No Issues Detected", MARGIN.toFloat(), yPos.toFloat(), titlePaint)
@@ -456,39 +461,24 @@ object PdfReportGenerator {
                 "Regular building maintenance",
                 "Monitor for progression during routine inspections"
             )
-            title.contains("Severe Paint") -> listOf(
-                "Check for moisture damage and mold",
-                "Strip to substrate",
-                "Prime and repaint"
+            // ✅ FIXED: Single paint recommendation
+            title.contains("Paint Damage") -> listOf(
+                "Inspect paint condition and extent of damage",
+                "Clean and prepare affected surfaces",
+                "Prime and repaint as needed",
+                "Address any underlying moisture issues"
             )
-            title.contains("Paint Damage") && !title.contains("Minor") -> listOf(
-                "Scrape and clean",
-                "Prime and repaint",
-                "Investigate moisture source"
-            )
-            title.contains("Minor Paint") -> listOf(
-                "Clean surface",
-                "Touch-up paint as needed",
-                "Schedule repainting during regular maintenance"
-            )
-            title.contains("Severe Algae") -> listOf(
-                "Professional biocide cleaning",
-                "Fix moisture source",
-                "Improve drainage"
-            )
-            title.contains("Moderate Algae") -> listOf(
-                "Clean affected areas",
-                "Improve drainage",
-                "Increase sunlight exposure"
-            )
-            title.contains("Minor Algae") -> listOf(
-                "Periodic cleaning",
-                "Enhance air circulation",
-                "Monitor growth patterns"
+            // ✅ FIXED: Single algae recommendation
+            title.contains("Algae/Moss") -> listOf(
+                "Clean affected areas with appropriate biocide",
+                "Improve drainage and air circulation",
+                "Reduce moisture sources",
+                "Increase sunlight exposure where possible"
             )
             else -> listOf("Inspect closely", "Address moisture", "Schedule professional assessment")
         }
     }
+
 
     private fun drawImagePage(canvas: Canvas, imageUrl: String, imageNumber: Int, totalImages: Int, context: Context) {
         try {
