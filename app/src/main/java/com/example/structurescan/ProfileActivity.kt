@@ -1,4 +1,5 @@
 package com.example.structurescan
+
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -64,12 +65,17 @@ class ProfileActivity : ComponentActivity() {
                     val email = document.getString("email") ?: currentUser.email ?: "No Email"
                     val photoUrl = document.getString("photoUrl")
 
+                    val isGoogleUser = currentUser.providerData.any {
+                        it.providerId == GoogleAuthProvider.PROVIDER_ID
+                    }
+
                     setContent {
                         MaterialTheme {
                             ProfileScreen(
                                 name = nameFromDoc ?: "Unknown User",
                                 email = email,
                                 profileImageUrl = photoUrl,
+                                isGoogleUser = isGoogleUser,
                                 logoutButton = {
                                     auth.signOut()
                                     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
@@ -96,24 +102,20 @@ class ProfileActivity : ComponentActivity() {
     }
 }
 
-// ✅ NEW: Composable to get user initial from name or email
-@Composable
+// ✅ Get user initial from name or email
 fun getUserInitial(name: String, email: String): String {
     return when {
         name.isNotBlank() && name != "Unknown User" -> {
-            // Get first letter of first name
             name.trim().firstOrNull()?.uppercase() ?: "U"
         }
         email.isNotBlank() && email != "No Email" -> {
-            // Get first letter of email
             email.trim().firstOrNull()?.uppercase() ?: "U"
         }
         else -> "U"
     }
 }
 
-// ✅ NEW: Generate color based on the initial letter
-@Composable
+// ✅ Generate color based on the initial letter
 fun getColorForInitial(initial: String): Color {
     val colors = listOf(
         Color(0xFF0288D1), // Blue
@@ -139,17 +141,11 @@ fun ProfileScreen(
     email: String,
     profileImageUrl: String?,
     logoutButton: () -> Unit,
-    editClick: () -> Unit
+    editClick: () -> Unit,
+    isGoogleUser: Boolean = false
 ) {
     val context = LocalContext.current
-    val firebaseAuth = FirebaseAuth.getInstance()
-    val currentUser = firebaseAuth.currentUser
-
     var showLogoutDialog by remember { mutableStateOf(false) }
-
-    val isGoogleUser = currentUser?.providerData?.any {
-        it.providerId == GoogleAuthProvider.PROVIDER_ID
-    } ?: false
 
     // ✅ Get user initial for placeholder
     val userInitial = getUserInitial(name, email)
@@ -163,25 +159,33 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .background(Color.White)
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // 🔹 Top bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Top bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
             ) {
-                IconButton(onClick = {
-                    val intent = Intent(context, DashboardActivity::class.java)
-                    context.startActivity(intent)
-                }) {
+                // Back Button - Left aligned
+                IconButton(
+                    onClick = {
+                        val intent = Intent(context, DashboardActivity::class.java)
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+
+                // Centered Title
                 Text(
                     text = "My Profile",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0288D1)
+                    color = Color(0xFF0288D1),
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
 
@@ -277,17 +281,20 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            OutlinedButton(
+            Button(
                 onClick = { showLogoutDialog = true },
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Red
-                ),
-                border = BorderStroke(1.dp, Color.Red),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp), // same height as profile options
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                shape = RoundedCornerShape(10.dp), // same as ProfileOption
             ) {
-                Text("Logout")
+                Text(
+                    text = "Logout",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
             }
         }
     }
@@ -424,7 +431,7 @@ fun LogoutDialog(
     }
 }
 
-// 🔹 Bottom Navigation
+// 🔹 Bottom Navigation with updated colors
 @Composable
 fun BottomNavigationBar(currentScreen: String) {
     val context = LocalContext.current
@@ -438,8 +445,11 @@ fun BottomNavigationBar(currentScreen: String) {
             icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
             label = { Text("Home") },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1)
+                unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
+                unselectedTextColor = Color.Gray
             )
         )
         NavigationBarItem(
@@ -451,8 +461,11 @@ fun BottomNavigationBar(currentScreen: String) {
             icon = { Icon(Icons.Filled.History, contentDescription = "History") },
             label = { Text("History") },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1)
+                unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
+                unselectedTextColor = Color.Gray
             )
         )
         NavigationBarItem(
@@ -461,8 +474,11 @@ fun BottomNavigationBar(currentScreen: String) {
             icon = { Icon(Icons.Filled.Person, contentDescription = "Profile") },
             label = { Text("Profile") },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1)
+                unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
+                unselectedTextColor = Color.Gray
             )
         )
     }
@@ -477,6 +493,7 @@ fun ProfilePreview() {
             name = "Preview User",
             email = "preview@example.com",
             profileImageUrl = null,
+            isGoogleUser = false,
             logoutButton = {},
             editClick = {}
         )

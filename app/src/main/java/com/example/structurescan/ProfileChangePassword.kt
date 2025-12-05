@@ -31,6 +31,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 
 class ProfileChangePassword : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,11 +67,11 @@ class ProfileChangePassword : ComponentActivity() {
 @Composable
 fun ProfileChangePasswordScreen(
     onBackClick: () -> Unit,
-    onPasswordChanged: () -> Unit
+    onPasswordChanged: () -> Unit,
+    firebaseUser: FirebaseUser? = try { FirebaseAuth.getInstance().currentUser } catch (e: Exception) { null }
 ) {
     val context = LocalContext.current
-    val firebaseAuth = FirebaseAuth.getInstance()
-    val currentUser = firebaseAuth.currentUser
+    val currentUser = firebaseUser
 
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -167,118 +168,160 @@ fun ProfileChangePasswordScreen(
         verticalArrangement = Arrangement.Top
     ) {
         // Top Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(
-                onClick = { onBackClick() },
-                enabled = !isLoading
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.Black
+                // Back Button (Left aligned)
+                IconButton(
+                    onClick = { onBackClick() },
+                    enabled = !isLoading,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.Black,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Centered Title
+                Text(
+                    text = "Change Password",
+                    modifier = Modifier.align(Alignment.Center),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0288D1)
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Change Password",
-                fontSize = 18.sp,
-                color = Color(0xFF0288D1),
-                fontWeight = FontWeight.Bold
-            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Current Password Field
-        OutlinedTextField(
-            value = currentPassword,
-            onValueChange = {
-                currentPassword = it
-                errorMessage = ""
-            },
-            label = { Text("Current Password") },
-            placeholder = { Text("Enter current password") },
-            singleLine = true,
-            enabled = !isLoading,
-            visualTransformation = if (currentPasswordVisible)
-                VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
-                    Icon(
-                        if (currentPasswordVisible) Icons.Default.Visibility
-                        else Icons.Default.VisibilityOff,
-                        contentDescription = "Toggle password visibility"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF0288D1)
+        // Current Password Field with Label
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Current Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-        )
+            OutlinedTextField(
+                value = currentPassword,
+                onValueChange = {
+                    currentPassword = it
+                    errorMessage = ""
+                },
+                placeholder = { Text("Enter current password", color = Color.Gray.copy(alpha = 0.5f)) },
+                singleLine = true,
+                enabled = !isLoading,
+                visualTransformation = if (currentPasswordVisible)
+                    VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                        Icon(
+                            if (currentPasswordVisible) Icons.Default.Visibility
+                            else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle password visibility",
+                            tint = Color.Gray
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // New Password Field
-        OutlinedTextField(
-            value = newPassword,
-            onValueChange = {
-                newPassword = it
-                errorMessage = ""
-            },
-            label = { Text("New Password") },
-            placeholder = { Text("Enter new password") },
-            singleLine = true,
-            enabled = !isLoading,
-            visualTransformation = if (newPasswordVisible)
-                VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
-                    Icon(
-                        if (newPasswordVisible) Icons.Default.Visibility
-                        else Icons.Default.VisibilityOff,
-                        contentDescription = "Toggle password visibility"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF0288D1)
+        // New Password Field with Label
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "New Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-        )
+            OutlinedTextField(
+                value = newPassword,
+                onValueChange = {
+                    newPassword = it
+                    errorMessage = ""
+                },
+                placeholder = { Text("Enter new password", color = Color.Gray.copy(alpha = 0.5f)) },
+                singleLine = true,
+                enabled = !isLoading,
+                visualTransformation = if (newPasswordVisible)
+                    VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                        Icon(
+                            if (newPasswordVisible) Icons.Default.Visibility
+                            else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle password visibility",
+                            tint = Color.Gray
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Confirm Password Field
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = {
-                confirmPassword = it
-                errorMessage = ""
-            },
-            label = { Text("Confirm New Password") },
-            placeholder = { Text("Confirm new password") },
-            singleLine = true,
-            enabled = !isLoading,
-            visualTransformation = if (confirmPasswordVisible)
-                VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                    Icon(
-                        if (confirmPasswordVisible) Icons.Default.Visibility
-                        else Icons.Default.VisibilityOff,
-                        contentDescription = "Toggle password visibility"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF0288D1)
+        // Confirm Password Field with Label
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Confirm New Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-        )
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = {
+                    confirmPassword = it
+                    errorMessage = ""
+                },
+                placeholder = { Text("Confirm new password", color = Color.Gray.copy(alpha = 0.5f)) },
+                singleLine = true,
+                enabled = !isLoading,
+                visualTransformation = if (confirmPasswordVisible)
+                    VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                        Icon(
+                            if (confirmPasswordVisible) Icons.Default.Visibility
+                            else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle password visibility",
+                            tint = Color.Gray
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -344,13 +387,18 @@ fun ProfileChangePasswordScreen(
                             errorMessage = validation
                         } else {
                             // ✅ All validations passed - update password in Firebase
+                            if (currentUser == null) {
+                                errorMessage = "User not authenticated"
+                                return@Button
+                            }
+
                             isLoading = true
-                            val email = currentUser?.email ?: ""
+                            val email = currentUser.email ?: ""
                             val credential = EmailAuthProvider.getCredential(email, currentPassword)
 
                             // Re-authenticate user first
-                            currentUser?.reauthenticate(credential)
-                                ?.addOnSuccessListener {
+                            currentUser.reauthenticate(credential)
+                                .addOnSuccessListener {
                                     // Now update password
                                     currentUser.updatePassword(newPassword)
                                         .addOnSuccessListener {
@@ -362,7 +410,7 @@ fun ProfileChangePasswordScreen(
                                             errorMessage = "Failed to update password: ${e.message}"
                                         }
                                 }
-                                ?.addOnFailureListener { e ->
+                                .addOnFailureListener { e ->
                                     isLoading = false
                                     errorMessage = when {
                                         e.message?.contains("password is invalid", ignoreCase = true) == true ->
@@ -409,7 +457,8 @@ fun ProfileChangePasswordPreview() {
     MaterialTheme {
         ProfileChangePasswordScreen(
             onBackClick = {},
-            onPasswordChanged = {}
+            onPasswordChanged = {},
+            firebaseUser = null // Preview mode - no Firebase user
         )
     }
 }

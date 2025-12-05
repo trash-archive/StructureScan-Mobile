@@ -176,7 +176,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 onExpandedChange = { expanded = !expanded }
             ) {
                 OutlinedTextField(
-                    value = selected.ifEmpty { placeholder },
+                    value = selected,
                     onValueChange = {},
                     readOnly = true,
                     placeholder = {
@@ -230,36 +230,45 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             .fillMaxSize()
             .background(Color.White)
     ) {
-        // Top bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shadowElevation = 2.dp
         ) {
-            IconButton(
-                onClick = { onBack() },
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(Color(0xFFF3F4F6), CircleShape)
-                    .align(Alignment.CenterStart)
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.Black,
-                    modifier = Modifier.size(20.dp)
+                // Back button (left aligned)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { onBack() }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                // Centered Title
+                Text(
+                    text = "Building Information",
+                    modifier = Modifier.align(Alignment.Center),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0288D1)
                 )
             }
-
-            Text(
-                text = "Building Information",
-                fontSize = 20.sp,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2196F3),
-                modifier = Modifier.align(Alignment.Center)
-            )
         }
+
+        Spacer(modifier = Modifier.height(16.dp)) // adjust height as needed
 
         // Scrollable content
         Column(
@@ -268,37 +277,47 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            // Required Building Details section
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 16.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = Color(0xFFE8F2FF), // soft blue background
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(Color(0xFF2196F3), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "i",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "Required Building Details",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
-                    )
-                    Text(
-                        "Help us provide accurate assessments",
-                        fontSize = 14.sp,
-                        color = Color(0xFF6B7280)
-                    )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(Color(0xFF2196F3), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "i",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            "Optional Building Details",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF4A86E8) // darker blue for contrast
+                        )
+                        Text(
+                            "This information helps with documentation",
+                            fontSize = 14.sp,
+                            color = Color(0xFF6B7280)
+                        )
+                    }
                 }
             }
 
@@ -307,7 +326,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             // Building Type
             CleanDropdownField(
                 label = "Building Type",
-                placeholder = "Select building type",
+                placeholder = "e.g., Residential, Commercial",
                 options = listOf("Residential", "Commercial", "Industrial", "Mixed-use"),
                 selected = buildingType
             ) { buildingType = it }
@@ -322,7 +341,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 Box(modifier = Modifier.weight(1f)) {
                     CleanInputField(
                         label = "Construction Year",
-                        placeholder = "1998",
+                        placeholder = "e.g., 2010",
                         value = constructionYear,
                         keyboardType = KeyboardType.Number,
                         onValueChange = {
@@ -335,7 +354,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 Box(modifier = Modifier.weight(1f)) {
                     CleanInputField(
                         label = "Last Renovation",
-                        placeholder = "Optional",
+                        placeholder = "e.g., 2020",
                         value = renovationYear,
                         keyboardType = KeyboardType.Number,
                         onValueChange = {
@@ -352,7 +371,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             // Number of Floors
             CleanInputField(
                 label = "Number of Floors",
-                placeholder = "Enter number of floors",
+                placeholder = "e.g., 2",
                 value = floors,
                 keyboardType = KeyboardType.Number,
                 onValueChange = {
@@ -367,7 +386,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             // Main Structural Material
             CleanDropdownField(
                 label = "Main Structural Material",
-                placeholder = "Select main material",
+                placeholder = "e.g., Concrete, Wood, Steel",
                 options = listOf(
                     "Reinforced Concrete",
                     "Wood",
@@ -384,8 +403,8 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
 
             // Foundation Type
             CleanDropdownField(
-                label = "Foundation Type (If Known)",
-                placeholder = "Select foundation type",
+                label = "Foundation Type",
+                placeholder = "e.g., Slab-on-grade",
                 options = listOf(
                     "Spread Footing",
                     "Slab-on-grade",
@@ -402,7 +421,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             // Environment Type
             CleanDropdownField(
                 label = "Environment Type",
-                placeholder = "Select environment",
+                placeholder = "e.g., Urban, Coastal",
                 options = listOf("Urban", "Suburban", "Rural", "Coastal", "Mountainous"),
                 selected = environment
             ) { environment = it }
@@ -418,7 +437,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Text(
-                "Have you noticed any structural issues before?",
+                "Select any issues noticed before",
                 fontSize = 14.sp,
                 color = Color(0xFF6B7280),
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -464,6 +483,12 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                "Select occupancy level",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280),
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -503,7 +528,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Text(
-                "Known natural disaster risks:",
+                "Select any known natural disaster risks",
                 fontSize = 14.sp,
                 color = Color(0xFF6B7280),
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -557,7 +582,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 onValueChange = { notes = it },
                 placeholder = {
                     Text(
-                        "Any other relevant information about the building...",
+                        "e.g., Recent water leaks in basement, visible foundation cracks...",
                         color = Color(0xFF9CA3AF),
                         fontSize = 16.sp
                     )
@@ -628,7 +653,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "You can edit this later",
+                text = "All fields are optional • You can skip this",
                 fontSize = 14.sp,
                 color = Color(0xFF9CA3AF),
                 modifier = Modifier.align(Alignment.CenterHorizontally)

@@ -1,8 +1,11 @@
 package com.example.structurescan
+
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularProgressIndicator
@@ -11,7 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -83,6 +90,28 @@ class LoadingActivity : ComponentActivity() {
 
 @Composable
 fun LoadingScreen(onTimeout: () -> Unit) {
+    // Fade in animation
+    val alpha by rememberInfiniteTransition(label = "alpha").animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    // Scale animation for logo
+    val scale by rememberInfiniteTransition(label = "scale").animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
     LaunchedEffect(Unit) {
         delay(3000) // 3 seconds splash
         onTimeout()
@@ -91,32 +120,89 @@ fun LoadingScreen(onTimeout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1976D2),
+                        Color(0xFF1565C0),
+                        Color(0xFF0D47A1)
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(32.dp)
         ) {
+            // Logo with scale animation
+            Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "StructureScan Logo",
+                modifier = Modifier
+                    .size(120.dp)
+                    .scale(scale)
+                    .padding(bottom = 32.dp)
+            )
+
+            // App Title
             Text(
                 text = "StructureScan",
-                color = Color(0xFF1565C0),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(bottom = 24.dp)
+                color = Color.White,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
 
+            // Subtitle
+            Text(
+                text = "Building Inspection System",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.padding(bottom = 48.dp)
+            )
+
+            // Progress Indicator
             CircularProgressIndicator(
-                color = Color(0xFF1565C0),
-                strokeWidth = 4.dp
+                color = Color.White,
+                strokeWidth = 4.dp,
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(bottom = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // Loading Text with pulse animation
+            Text(
+                text = "Loading your workspace...",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.alpha(alpha)
+            )
+        }
+
+        // Footer
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Powered by StructureScan",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal
+            )
 
             Text(
-                text = "Loading...",
-                color = Color(0xFF1565C0),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
+                text = "Version 1.0",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Light,
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }

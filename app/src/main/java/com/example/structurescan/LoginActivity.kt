@@ -210,7 +210,6 @@ fun LoginScreen(
                                                 isGoogleLoginLoading = false
                                                 if (document.exists()) {
                                                     val role = document.getString("role") ?: "user"
-                                                    Toast.makeText(context, "Welcome $role!", Toast.LENGTH_SHORT).show()
                                                     val intent = Intent(activity, DashboardActivity::class.java)
                                                     activity.startActivity(intent)
                                                     activity.finish()
@@ -300,49 +299,67 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(36.dp))
 
         // Email Address Field
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            placeholder = { Text("Enter your email address", color = Color.Gray) },
-            singleLine = true,
-            enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF0288D1),
-                unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Email Address",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF333333),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                placeholder = { Text("Enter your email address", color = Color.Gray) },
+                singleLine = true,
+                enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Password Field
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            placeholder = { Text("Enter your password", color = Color.Gray) },
-            singleLine = true,
-            enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    enabled = !isEmailLoginLoading && !isGoogleLoginLoading
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                        contentDescription = "Toggle Password",
-                        tint = Color.Gray
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF0288D1),
-                unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF333333),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = { Text("Enter your password", color = Color.Gray) },
+                singleLine = true,
+                enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        enabled = !isEmailLoginLoading && !isGoogleLoginLoading
+                    ) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                            contentDescription = "Toggle Password",
+                            tint = Color.Gray
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -388,11 +405,7 @@ fun LoginScreen(
                                                             isEmailLoginLoading = false
                                                             if (document.exists()) {
                                                                 val role = document.getString("role") ?: "user"
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Welcome $role!",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
+
 
                                                                 val intent = Intent(activity, DashboardActivity::class.java)
                                                                 activity.startActivity(intent)
@@ -546,16 +559,198 @@ fun LoginScreen(
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {
-    val fakeAuth = FirebaseAuth.getInstance()
-    val fakeDb = FirebaseFirestore.getInstance()
-    val fakeGoogle = GoogleSignIn.getClient(
-        LocalContext.current,
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
-    )
-    LoginScreen(
-        activity = object : ComponentActivity() {},
-        auth = fakeAuth,
-        db = fakeDb,
-        googleSignInClient = fakeGoogle
-    )
+    // Preview without Firebase initialization
+    LoginScreenPreviewContent()
+}
+
+@Composable
+private fun LoginScreenPreviewContent() {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isEmailLoginLoading by remember { mutableStateOf(false) }
+    var isGoogleLoginLoading by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(60.dp))
+
+        // Logo placeholder
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(
+                    color = Color(0xFF0288D1).copy(alpha = 0.1f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "LOGO",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0288D1)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "StructureScan",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0288D1)
+        )
+
+        Text(
+            text = "Structural safety in your hands",
+            fontSize = 14.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Email Address Field
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Email Address",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF333333),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                placeholder = { Text("Enter your email address", color = Color.Gray) },
+                singleLine = true,
+                enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Password Field
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF333333),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = { Text("Enter your password", color = Color.Gray) },
+                singleLine = true,
+                enabled = !isEmailLoginLoading && !isGoogleLoginLoading,
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        enabled = !isEmailLoginLoading && !isGoogleLoginLoading
+                    ) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                            contentDescription = "Toggle Password",
+                            tint = Color.Gray
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF0288D1),
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Forgot password?",
+            color = Color(0xFF0288D1),
+            fontSize = 14.sp,
+            modifier = Modifier.align(Alignment.End)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Login Button
+        Button(
+            onClick = { },
+            enabled = true,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF0288D1)
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(25.dp)
+        ) {
+            Text("LOG IN", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Or continue with",
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Google Sign In Button placeholder
+        Surface(
+            shape = CircleShape,
+            color = Color.White,
+            shadowElevation = 2.dp,
+            modifier = Modifier.size(50.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Text(
+                    "G",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0288D1)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Don't have an account? ", fontSize = 14.sp, color = Color.Gray)
+            Text(
+                text = "Create Account",
+                color = Color(0xFF0288D1),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
 }

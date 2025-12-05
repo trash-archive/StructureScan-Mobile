@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "643922036301",
+    "project_id": "structurescan-d0840",
+    "storage_bucket": "structurescan-d0840.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:643922036301:android:4228de6ae8f46ff783be04",
+        "android_client_info": {
+          "package_name": "com.example.structurescan"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "643922036301-gvlrvh499e4n1hqhuk8n25o1lj4a5968.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.structurescan",
+            "certificate_hash": "672f4ce7e3fc612454877f08b8a555ab0f333a36"
+          }
+        },
+        {
+          "client_id": "643922036301-tfsbb8tajv3pe83l974e5c5leudkoe6m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.structurescan",
+            "certificate_hash": "6b3806ccb94b0c2f587ac026f2d0fdb9160ccb01"
+          }
+        },
+        {
+          "client_id": "643922036301-ji40i0tc4lemcjq4su8l071d0n4mvdq3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDP1-7i07QDZb8NIVddntjLELS39KgNfl0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "643922036301-ji40i0tc4lemcjq4su8l071d0n4mvdq3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

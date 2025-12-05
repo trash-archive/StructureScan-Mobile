@@ -57,15 +57,6 @@ class CaptureImagesActivity : ComponentActivity() {
                     onBack = {
                         finish()
                     },
-                    onViewImage = { images ->
-                        val intent = Intent(this, SavedPhotoActivity::class.java)
-                        intent.putStringArrayListExtra(
-                            IntentKeys.CAPTURED_IMAGES,
-                            ArrayList(images.map { it.toString() })
-                        )
-                        intent.putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
-                        startActivity(intent)
-                    },
                     onProceed = { images ->
                         val intent = Intent(this, BuildingInfoActivity::class.java)
                         intent.putStringArrayListExtra(
@@ -85,7 +76,6 @@ class CaptureImagesActivity : ComponentActivity() {
 fun CameraScreen(
     assessmentName: String,
     onBack: () -> Unit,
-    onViewImage: (List<Uri>) -> Unit,
     onProceed: (List<Uri>) -> Unit
 ) {
     val context = LocalContext.current
@@ -113,7 +103,6 @@ fun CameraScreen(
             if (success && pendingPhotoUri != null) {
                 images.add(pendingPhotoUri!!)
                 currentImageIndex = images.size - 1
-                Toast.makeText(context, "Photo captured", Toast.LENGTH_SHORT).show()
             }
             pendingPhotoUri = null
         }
@@ -318,7 +307,7 @@ fun CameraScreen(
                         modifier = Modifier
                             .size(70.dp)
                             .background(
-                                if (images.size < 7) Color(0xFF6366F1) else Color.Gray,
+                                if (images.size < 7) Color(0xFF2563EB) else Color.Gray,
                                 CircleShape
                             )
                     ) {
@@ -329,37 +318,39 @@ fun CameraScreen(
                             modifier = Modifier.size(35.dp)
                         )
                     }
-                    Text("Capture", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                 }
 
                 // Proceed Button
-                IconButton(
-                    onClick = {
-                        when {
-                            images.isEmpty() -> {
-                                Toast.makeText(context, "Please capture an image", Toast.LENGTH_SHORT).show()
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(
+                        onClick = {
+                            when {
+                                images.isEmpty() -> {
+                                    Toast.makeText(context, "Please capture an image", Toast.LENGTH_SHORT).show()
+                                }
+                                images.size in 1..2 -> {
+                                    Toast.makeText(
+                                        context,
+                                        "It's recommended to upload at least 3 photos for better analysis.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    onProceed(images)
+                                }
+                                else -> {
+                                    onProceed(images)
+                                }
                             }
-                            images.size in 1..2 -> {
-                                Toast.makeText(
-                                    context,
-                                    "It's recommended to upload at least 3 photos for better analysis.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                onProceed(images)
-                            }
-                            else -> {
-                                onProceed(images)
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(60.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Proceed",
-                        tint = if (images.isNotEmpty()) Color(0xFF10B981) else Color.Gray,
-                        modifier = Modifier.size(30.dp)
-                    )
+                        },
+                        modifier = Modifier.size(60.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Proceed",
+                            tint = if (images.isNotEmpty()) Color(0xFF10B981) else Color.Gray,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                    Text("Proceed", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -385,7 +376,7 @@ fun InstructionDialog(onDismiss: () -> Unit) {
                 Icon(
                     Icons.Default.Info,
                     contentDescription = "Instructions",
-                    tint = Color(0xFF6366F1),
+                    tint = Color(0xFF2563EB),
                     modifier = Modifier.size(48.dp)
                 )
 
@@ -418,7 +409,7 @@ fun InstructionDialog(onDismiss: () -> Unit) {
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
                     Text("Got it!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
@@ -437,7 +428,7 @@ fun InstructionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text:
         Icon(
             icon,
             contentDescription = null,
-            tint = Color(0xFF6366F1),
+            tint = Color(0xFF2563EB),
             modifier = Modifier.size(24.dp)
         )
         Text(
@@ -456,7 +447,6 @@ fun CameraPreview() {
         CameraScreen(
             assessmentName = "Sample Assessment",
             onBack = {},
-            onViewImage = {},
             onProceed = {}
         )
     }

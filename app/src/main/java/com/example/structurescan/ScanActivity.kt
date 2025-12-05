@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight.Companion.Bold
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,28 +63,40 @@ fun ScanScreen(onBackClick: () -> Unit, onContinue: (String) -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
-            // --- Top Bar with Back Arrow + Title ---
-            Row(
+            // --- Top Bar with Centered Title + Back Arrow ---
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { onBackClick() })
-                {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.Black,
-                        modifier = Modifier.size(24.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                ) {
+                    // Back Button (left aligned)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { onBackClick() }) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.Black,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // Centered Title
+                    Text(
+                        text = "Create New Assessment",
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0288D1),
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Create New Assessment",
-                    fontSize = 16.sp,
-                    fontWeight = Bold,
-                    color = Color(0xFF0288D1),
-                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -149,9 +162,11 @@ fun ScanScreen(onBackClick: () -> Unit, onContinue: (String) -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "You can change this name later in settings",
+                text = "This name cannot be changed. Please choose carefully.",
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = Color.Gray,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -179,7 +194,14 @@ fun BottomNavigationBarDashboardScan(currentRoute: String = "home") {
                     "Home",
                     color = if (currentRoute == "home") Color(0xFF0288D1) else Color.Gray
                 )
-            }
+            },
+            colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent, // removes oblong background
+                selectedIconColor = Color(0xFF0288D1),
+                unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
+                unselectedTextColor = Color.Gray
+            )
         )
 
         // History

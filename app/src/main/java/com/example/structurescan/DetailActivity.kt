@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
@@ -180,9 +181,29 @@ fun DetailScreen(
     var showImageSourceDialog by remember { mutableStateOf(false) }
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
 
-    val professionOptions = listOf("Engineer", "Architect", "Inspector", "Manager", "Technician", "Other (Please specify)")
+    val professionOptions = listOf(
+        "Student",
+        "Unemployed / Not Working",
+        "Engineer",
+        "Architect",
+        "Inspector",
+        "Construction Worker",
+        "Technician",
+        "Manager",
+        "Foreman",
+        "Safety Officer",
+        "Real Estate Agent",
+        "Property Manager",
+        "Building Owner",
+        "Maintenance Staff",
+        "Homeowner",
+        "Civil Engineering Graduate",
+        "Architecture Graduate",
+        "Contractor",
+        "Other (Please specify)"
+    )
 
-    // ✅ Camera Launcher (defined FIRST)
+    // Camera Launcher (defined FIRST)
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -192,7 +213,7 @@ fun DetailScreen(
         }
     }
 
-    // ✅ Camera Permission Launcher (uses cameraLauncher)
+    // Camera Permission Launcher (uses cameraLauncher)
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -275,13 +296,13 @@ fun DetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Tell us about yourself",
+                text = "Complete your profile",
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                text = "This helps us personalize your experience",
+                text = "These details are optional and can be updated anytime.",
                 fontSize = 14.sp,
                 color = Color.Gray,
                 textAlign = TextAlign.Center,
@@ -289,7 +310,7 @@ fun DetailScreen(
             )
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Add a profile photo", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text("Add a profile photo", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 10.dp))
 
                 Box(
                     modifier = Modifier
@@ -325,7 +346,13 @@ fun DetailScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Profession", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = "Profession",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF333333),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
                 ExposedDropdownMenuBox(
                     expanded = isDropdownExpanded,
                     onExpandedChange = { if (!isLoading) isDropdownExpanded = it },
@@ -459,5 +486,17 @@ fun DetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+fun DetailScreenPreview() {
+    MaterialTheme {
+        DetailScreen(
+            onSkip = {},
+            onBack = {},
+            onContinue = { _, _, _, _ -> }
+        )
     }
 }

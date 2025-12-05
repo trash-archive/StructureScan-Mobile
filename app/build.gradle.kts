@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.example.structurescan"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.structurescan"
@@ -36,6 +36,13 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+
+        // Add Compose compiler feature flags
+        freeCompilerArgs += listOf(
+            "-P=plugin:androidx.compose.compiler.plugins.kotlin:featureFlag=IntrinsicRemember=true",
+            "-P=plugin:androidx.compose.compiler.plugins.kotlin:featureFlag=OptimizeNonSkippingGroups=true",
+            "-P=plugin:androidx.compose.compiler.plugins.kotlin:featureFlag=StrongSkipping=true"
+        )
     }
     buildFeatures {
         viewBinding = true

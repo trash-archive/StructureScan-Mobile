@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -100,16 +101,19 @@ fun EditProfileScreen(
     onSaveChanges: (String, String, String, Uri?) -> Unit
 ) {
     val context = LocalContext.current
-    val auth = FirebaseAuth.getInstance()
-    val firestore = FirebaseFirestore.getInstance()
-    val storage = FirebaseStorage.getInstance()
-    val currentUser = auth.currentUser
+    val isPreview = LocalInspectionMode.current
+
+    // ✅ Only initialize Firebase if NOT in preview mode
+    val auth = if (!isPreview) FirebaseAuth.getInstance() else null
+    val firestore = if (!isPreview) FirebaseFirestore.getInstance() else null
+    val storage = if (!isPreview) FirebaseStorage.getInstance() else null
+    val currentUser = auth?.currentUser
 
     // UI states
-    var fullName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var originalEmail by remember { mutableStateOf("") }
-    var selectedProfession by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("John Doe") }
+    var email by remember { mutableStateOf("john.doe@example.com") }
+    var originalEmail by remember { mutableStateOf("john.doe@example.com") }
+    var selectedProfession by remember { mutableStateOf("Engineer") }
     var customProfession by remember { mutableStateOf("") }
     var showCustomInput by remember { mutableStateOf(false) }
     var photoUrl by remember { mutableStateOf<String?>(null) }
@@ -132,7 +136,28 @@ fun EditProfileScreen(
     var newEmailAddress by remember { mutableStateOf("") }
 
     val isGoogleUser = currentUser?.providerData?.any { it.providerId == "google.com" } == true
-    val professionOptions = listOf("Engineer", "Architect", "Inspector", "Manager", "Technician", "Other (Please specify)")
+
+    val professionOptions = listOf(
+        "Student",
+        "Unemployed / Not Working",
+        "Engineer",
+        "Architect",
+        "Inspector",
+        "Construction Worker",
+        "Technician",
+        "Manager",
+        "Foreman",
+        "Safety Officer",
+        "Real Estate Agent",
+        "Property Manager",
+        "Building Owner",
+        "Maintenance Staff",
+        "Homeowner",
+        "Civil Engineering Graduate",
+        "Architecture Graduate",
+        "Contractor",
+        "Other (Please specify)"
+    )
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -171,11 +196,13 @@ fun EditProfileScreen(
         }
     }
 
-    // Load user data once
+    // Load user data once (only if not in preview)
     LaunchedEffect(currentUser?.uid) {
+        if (isPreview) return@LaunchedEffect
+
         currentUser?.uid?.let { uid ->
             try {
-                val doc = firestore.collection("users").document(uid).get().await()
+                val doc = firestore!!.collection("users").document(uid).get().await()
                 fullName = doc.getString("fullName") ?: currentUser.displayName ?: ""
                 email = doc.getString("email") ?: currentUser.email ?: ""
                 originalEmail = email
@@ -222,6 +249,7 @@ fun EditProfileScreen(
 
     // ✅ Check if email already exists in Firestore
     suspend fun isEmailAlreadyUsed(emailToCheck: String, currentUid: String): Boolean {
+        if (isPreview || firestore == null) return false
         return try {
             val querySnapshot = firestore.collection("users")
                 .whereEqualTo("email", emailToCheck)
@@ -237,6 +265,7 @@ fun EditProfileScreen(
 
     // Upload helpers
     suspend fun uploadBitmap(uid: String, bitmap: Bitmap): String {
+        if (isPreview || storage == null) return ""
         val baos = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
         val bytes = baos.toByteArray()
@@ -246,6 +275,7 @@ fun EditProfileScreen(
     }
 
     suspend fun uploadUri(uid: String, uri: Uri): String {
+        if (isPreview || storage == null) return ""
         val ref = storage.reference.child("profile_images/$uid.jpg")
         ref.putFile(uri).await()
         return ref.downloadUrl.await().toString()
@@ -364,18 +394,7 @@ fun EditProfileScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
-        TopAppBar(
-            title = { Text("Edit Profile", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black) },
-            navigationIcon = {
-                IconButton(
-                    onClick = onBackClick,
-                    enabled = !isLoading
-                ) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-        )
+
 
         Column(
             modifier = Modifier
@@ -385,7 +404,43 @@ fun EditProfileScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // ✅ Profile picture with Initial Placeholder
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp), // optional: adjust height
+                color = Color.White,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    // Back Button (Left aligned)
+                    IconButton(
+                        onClick = { onBackClick() },
+                        enabled = !isLoading,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Centered Title
+                    Text(
+                        text = "Edit Profile",
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0288D1)
+                    )
+                }
+            }
+
+            // Profile picture with Initial Placeholder
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -459,7 +514,7 @@ fun EditProfileScreen(
                     confirmButton = {
                         TextButton(onClick = {
                             showImageSourceDialog = false
-                            galleryLauncher.launch("image/*")
+                            if (!isPreview) galleryLauncher.launch("image/*")
                         }) {
                             Text("Choose from Gallery")
                         }
@@ -467,7 +522,7 @@ fun EditProfileScreen(
                     dismissButton = {
                         TextButton(onClick = {
                             showImageSourceDialog = false
-                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            if (!isPreview) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }) {
                             Text("Take Photo")
                         }
@@ -563,9 +618,11 @@ fun EditProfileScreen(
                 }
             }
 
-            // ✅ Save button with email verification
+            // ✅ Save button (disabled in preview)
             Button(
                 onClick = {
+                    if (isPreview) return@Button
+
                     fullNameError = validateFullName(fullName)
                     emailError = validateEmailAddress(email)
 
@@ -648,7 +705,7 @@ fun EditProfileScreen(
                                 updateMap["email"] = email.trim()
                             }
 
-                            firestore.collection("users")
+                            firestore!!.collection("users")
                                 .document(uid)
                                 .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
                                 .await()

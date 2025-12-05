@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -81,6 +81,11 @@ fun SavedPhotoScreen(
     var selectedImage by remember { mutableStateOf(images.firstOrNull()) }
     val canProceed = images.size in 1..7
 
+    // ✅ FIXED: Handle system back button to return updated images
+    BackHandler {
+        onBack(images.toList())
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -99,58 +104,66 @@ fun SavedPhotoScreen(
             )
         }
 
-        // Top bar with back
+        // Top bar with back button and proceed button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
                 .align(Alignment.TopStart),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(onClick = { onBack(images) }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
-            }
-            Text(
-                text = "Saved Photos (${images.size})",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-
-        // Proceed button
-        IconButton(
-            onClick = {
-                when {
-                    images.isEmpty() -> {
-                        Toast.makeText(context, "Please add at least 1 photo.", Toast.LENGTH_SHORT).show()
-                    }
-                    images.size > 7 -> {
-                        Toast.makeText(context, "You can't add more than 7 photos.", Toast.LENGTH_SHORT).show()
-                    }
-                    images.size < 3 -> {
-                        Toast.makeText(
-                            context,
-                            "It's recommended to upload at least 3 photos for better analysis.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        onProceed(images)
-                    }
-                    else -> {
-                        onProceed(images)
-                    }
+            // Back button and title
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { onBack(images.toList()) }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                 }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(60.dp)
-        ) {
-            Icon(
-                Icons.Default.Check,
-                contentDescription = "Proceed",
-                tint = if (canProceed) Color(0xFF10B981) else Color.Gray,
-                modifier = Modifier.size(30.dp)
-            )
+                Text(
+                    text = "Saved Photos (${images.size})",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // Proceed button
+            Button(
+                onClick = {
+                    when {
+                        images.isEmpty() -> {
+                            Toast.makeText(context, "Please add at least 1 photo.", Toast.LENGTH_SHORT).show()
+                        }
+                        images.size > 7 -> {
+                            Toast.makeText(context, "You can't add more than 7 photos.", Toast.LENGTH_SHORT).show()
+                        }
+                        images.size < 3 -> {
+                            Toast.makeText(
+                                context,
+                                "It's recommended to upload at least 3 photos for better analysis.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            onProceed(images.toList())
+                        }
+                        else -> {
+                            onProceed(images.toList())
+                        }
+                    }
+                },
+                enabled = canProceed,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF10B981),
+                    disabledContainerColor = Color.Gray
+                ),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "Proceed",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
         }
 
         // Thumbnail gallery - FIXED SIZE THUMBNAILS
@@ -159,7 +172,7 @@ fun SavedPhotoScreen(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(16.dp)
-                    .padding(end = 80.dp),
+                    .fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(images) { uri ->
@@ -172,33 +185,37 @@ fun SavedPhotoScreen(
                             painter = rememberAsyncImagePainter(uri),
                             contentDescription = null,
                             modifier = Modifier
-                                .size(100.dp)
+                                .fillMaxSize()
                                 .border(
                                     3.dp,
-                                    if (uri == selectedImage) Color.Green else Color.White,
+                                    if (uri == selectedImage) Color(0xFF10B981) else Color.White,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .clickable { selectedImage = uri },
                             contentScale = ContentScale.Crop
                         )
 
-                        IconButton(
-                            onClick = {
-                                images.remove(uri)
-                                if (selectedImage == uri) {
-                                    selectedImage = images.firstOrNull()
-                                }
-                            },
+                        // Improved delete button
+                        Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(24.dp)
-                                .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                .offset(x = 8.dp, y = (-8).dp)
+                                .size(28.dp)
+                                .background(Color.Red, CircleShape)
+                                .border(2.dp, Color.White, CircleShape)
+                                .clickable {
+                                    images.remove(uri)
+                                    if (selectedImage == uri) {
+                                        selectedImage = images.firstOrNull()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Delete",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }

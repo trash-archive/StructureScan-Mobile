@@ -201,41 +201,42 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // "Start New Assessment" card
+                // "Start New Assessment" card with new colors
                 Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1565C0)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C3D6C)),
                     modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp)
+                        modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
                             text = "Start New\nAssessment",
                             color = Color.White,
-                            fontSize = 20.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            lineHeight = 24.sp
+                            lineHeight = 28.sp
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = "Take photos of your building to\nget an instant structural analysis",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            lineHeight = 18.sp
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 15.sp,
+                            lineHeight = 20.sp
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = { onScanClick() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFC107)),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD166)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 14.dp)
                         ) {
                             Text(
                                 "Scan Now",
-                                color = Color.Black,
-                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF1C3D6C),
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
                         }
@@ -480,7 +481,14 @@ fun BottomNavigationBarDashboard(
                     fontSize = 12.sp,
                     color = if (currentRoute == "home") Color(0xFF0288D1) else Color.Gray
                 )
-            }
+            },
+            colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent, // removes oblong background
+                selectedIconColor = Color(0xFF0288D1),
+                unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
+                unselectedTextColor = Color.Gray
+            )
         )
 
         // History

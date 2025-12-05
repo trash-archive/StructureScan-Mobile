@@ -81,8 +81,8 @@ class HistoryActivity : ComponentActivity() {
 
 @Composable
 fun HistoryScreen(
-    firestore: FirebaseFirestore,
-    firebaseAuth: FirebaseAuth
+    firestore: FirebaseFirestore? = null,
+    firebaseAuth: FirebaseAuth? = null
 ) {
     val context = LocalContext.current
 
@@ -118,6 +118,12 @@ fun HistoryScreen(
     }
 
     LaunchedEffect(Unit) {
+        if (firebaseAuth == null || firestore == null) {
+            // Preview mode - don't try to load data
+            isLoading = false
+            return@LaunchedEffect
+        }
+
         val currentUser = firebaseAuth.currentUser
         if (currentUser == null) {
             errorMessage = "Please log in to view history"
@@ -214,8 +220,8 @@ fun HistoryScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val currentUser = firebaseAuth.currentUser
-                        if (currentUser != null) {
+                        val currentUser = firebaseAuth?.currentUser
+                        if (currentUser != null && firestore != null) {
                             selectedAssessments.forEach { assessmentId ->
                                 firestore.collection("users")
                                     .document(currentUser.uid)
@@ -311,17 +317,20 @@ fun HistoryScreen(
         ) {
             if (!isSelectionMode) {
                 // Top Bar
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(Color.White)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    IconButton(onClick = {
-                        val intent = Intent(context, DashboardActivity::class.java)
-                        context.startActivity(intent)
-                    }) {
+                    // Back Button (Left)
+                    IconButton(
+                        onClick = {
+                            val intent = Intent(context, DashboardActivity::class.java)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
@@ -329,12 +338,14 @@ fun HistoryScreen(
                             modifier = Modifier.size(24.dp)
                         )
                     }
+
+                    // Centered Title
                     Text(
                         text = "Assessment History",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF0288D1),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
 
@@ -752,9 +763,10 @@ fun BottomNavigationBarHistory(currentScreen: String) {
                 )
             },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1),
                 unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
                 unselectedTextColor = Color.Gray
             )
         )
@@ -775,9 +787,10 @@ fun BottomNavigationBarHistory(currentScreen: String) {
                 )
             },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1),
                 unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
                 unselectedTextColor = Color.Gray
             )
         )
@@ -801,9 +814,10 @@ fun BottomNavigationBarHistory(currentScreen: String) {
                 )
             },
             colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
                 selectedIconColor = Color(0xFF0288D1),
-                selectedTextColor = Color(0xFF0288D1),
                 unselectedIconColor = Color.Gray,
+                selectedTextColor = Color(0xFF0288D1),
                 unselectedTextColor = Color.Gray
             )
         )
@@ -814,8 +828,7 @@ fun BottomNavigationBarHistory(currentScreen: String) {
 @Composable
 fun HistoryPreview() {
     MaterialTheme {
-        val mockFirestore = FirebaseFirestore.getInstance()
-        val mockAuth = FirebaseAuth.getInstance()
-        HistoryScreen(firestore = mockFirestore, firebaseAuth = mockAuth)
+        // ✅ Pass null for Firebase instances in preview mode
+        HistoryScreen(firestore = null, firebaseAuth = null)
     }
 }

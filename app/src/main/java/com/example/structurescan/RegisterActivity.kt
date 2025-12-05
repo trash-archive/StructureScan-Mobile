@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Visibility
@@ -79,6 +80,16 @@ data class PasswordValidation(
     fun isValid(): Boolean = hasMinLength && hasUpperCase && hasLowerCase && hasDigit && hasSpecialChar
 }
 
+// ✅ Email Validation Data Class
+data class EmailValidation(
+    val isValidFormat: Boolean = false,
+    val hasAtSymbol: Boolean = false,
+    val hasDomain: Boolean = false,
+    val isNotEmpty: Boolean = false
+) {
+    fun isValid(): Boolean = isValidFormat && hasAtSymbol && hasDomain && isNotEmpty
+}
+
 // ✅ Password Validator Function
 fun validatePassword(password: String): PasswordValidation {
     return PasswordValidation(
@@ -90,13 +101,27 @@ fun validatePassword(password: String): PasswordValidation {
     )
 }
 
+// ✅ Email Validator Function
+fun validateEmail(email: String): EmailValidation {
+    val hasAtSymbol = email.contains("@")
+    val hasDomain = email.contains("@") && email.substringAfter("@").contains(".")
+    val isValidFormat = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+
+    return EmailValidation(
+        isValidFormat = isValidFormat,
+        hasAtSymbol = hasAtSymbol,
+        hasDomain = hasDomain,
+        isNotEmpty = email.isNotEmpty()
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    activity: ComponentActivity,
-    auth: FirebaseAuth,
-    db: FirebaseFirestore,
-    googleSignInClient: GoogleSignInClient
+    activity: ComponentActivity?,
+    auth: FirebaseAuth?,
+    db: FirebaseFirestore?,
+    googleSignInClient: GoogleSignInClient?
 ) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -110,7 +135,13 @@ fun RegisterScreen(
     var passwordValidation by remember { mutableStateOf(PasswordValidation()) }
     var showPasswordRequirements by remember { mutableStateOf(false) }
 
-    // ✅ NEW: Terms dialog states
+    // ✅ Email validation state
+    var emailValidation by remember { mutableStateOf(EmailValidation()) }
+    var showEmailRequirements by remember { mutableStateOf(false) }
+    var emailAlreadyExists by remember { mutableStateOf(false) }
+    var isCheckingEmail by remember { mutableStateOf(false) }
+
+    // ✅ Terms dialog states
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
 
@@ -121,6 +152,8 @@ fun RegisterScreen(
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        if (activity == null || auth == null || db == null) return@rememberLauncherForActivityResult
+
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account: GoogleSignInAccount = task.getResult(ApiException::class.java)
@@ -183,318 +216,525 @@ fun RegisterScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxSize()
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Create new account",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF0288D1)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Full Name Field
-        OutlinedTextField(
-            value = fullName,
-            onValueChange = { fullName = it },
-            label = { Text("Full Name") },
-            placeholder = { Text("John Doe") },
-            singleLine = true,
-            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Email Field
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email Address") },
-            placeholder = { Text("example@gmail.com") },
-            singleLine = true,
-            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Password Field
-        OutlinedTextField(
-            value = password,
-            onValueChange = {
-                password = it
-                passwordValidation = validatePassword(it)
-                showPasswordRequirements = it.isNotEmpty()
-            },
-            label = { Text("Password") },
-            singleLine = true,
-            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                        contentDescription = "Toggle Password"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // ✅ Password Requirements Indicator
-        if (showPasswordRequirements) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
-                shape = RoundedCornerShape(8.dp)
+        // ✅ Header with Back Button
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shadowElevation = 2.dp
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Password must contain:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.DarkGray
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    PasswordRequirementItem("At least 8 characters", passwordValidation.hasMinLength)
-                    PasswordRequirementItem("One uppercase letter (A-Z)", passwordValidation.hasUpperCase)
-                    PasswordRequirementItem("One lowercase letter (a-z)", passwordValidation.hasLowerCase)
-                    PasswordRequirementItem("One number (0-9)", passwordValidation.hasDigit)
-                    PasswordRequirementItem("One special character (!@#$%^&*)", passwordValidation.hasSpecialChar)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Confirm Password Field
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = { confirmPassword = it },
-            label = { Text("Confirm Password") },
-            singleLine = true,
-            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
-            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(
-                    onClick = { confirmPasswordVisible = !confirmPasswordVisible },
-                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
-                ) {
-                    Icon(
-                        imageVector = if (confirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                        contentDescription = "Toggle Password"
-                    )
-                }
-            },
-            isError = confirmPassword.isNotEmpty() && password != confirmPassword,
-            supportingText = {
-                if (confirmPassword.isNotEmpty() && password != confirmPassword) {
-                    Text(
-                        text = "Passwords do not match",
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // ✅ Terms Checkbox with Clickable Links
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Checkbox(
-                checked = agreeTerms,
-                onCheckedChange = { agreeTerms = it },
-                enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
-            )
-            Text(
-                text = buildAnnotatedString {
-                    append("I agree to ")
-                    withStyle(style = SpanStyle(color = Color(0xFF0288D1), fontWeight = FontWeight.Bold)) {
-                        append("Terms and Conditions")
-                    }
-                    append(" and have read the ")
-                    withStyle(style = SpanStyle(color = Color(0xFF0288D1), fontWeight = FontWeight.Bold)) {
-                        append("Privacy Policy")
-                    }
-                },
-                fontSize = 14.sp,
-                color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray else Color.Black,
-                modifier = Modifier.clickable(enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading) {
-                    showTermsDialog = true
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ✅ Sign Up Button
-        Button(
-            onClick = {
-                if (fullName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
-                    Toast.makeText(activity, "All fields are required.", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                    Toast.makeText(activity, "Please enter a valid email address.", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                if (!passwordValidation.isValid()) {
-                    Toast.makeText(activity, "Password does not meet the requirements.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-
-                if (password != confirmPassword) {
-                    Toast.makeText(activity, "Passwords do not match.", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                if (!agreeTerms) {
-                    Toast.makeText(activity, "You must agree to the terms.", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                isEmailSignUpLoading = true
-
-                auth.createUserWithEmailAndPassword(email, password)
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful) {
-                            val user = auth.currentUser
-                            val userId = user?.uid
-
-                            val profileUpdates = UserProfileChangeRequest.Builder()
-                                .setDisplayName(fullName)
-                                .build()
-                            user?.updateProfile(profileUpdates)
-
-                            val userData = hashMapOf(
-                                "fullName" to fullName,
-                                "email" to email,
-                                "profession" to "",
-                                "photoUrl" to ""
-                            )
-
-                            if (userId != null) {
-                                db.collection("users").document(userId)
-                                    .set(userData)
-                                    .addOnSuccessListener {
-                                        isEmailSignUpLoading = false
-                                        Toast.makeText(activity, "Account created!", Toast.LENGTH_SHORT).show()
-                                        val intent = Intent(activity, DetailActivity::class.java)
-                                        activity.startActivity(intent)
-                                        activity.finish()
-                                    }
-                                    .addOnFailureListener {
-                                        isEmailSignUpLoading = false
-                                        Toast.makeText(activity, "Failed to save user data.", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        } else {
-                            isEmailSignUpLoading = false
-                            Toast.makeText(activity, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-            },
-            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF0288D1),
-                disabledContainerColor = Color(0xFF0288D1).copy(alpha = 0.6f)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(25.dp)
-        ) {
-            if (isEmailSignUpLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = Color.White,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text("SIGN UP", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            "Or continue with",
-            color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray.copy(alpha = 0.5f) else Color.Gray,
-            fontSize = 14.sp
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Google Sign-In Button
-        Box(
-            modifier = Modifier.size(50.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isGoogleSignUpLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(50.dp),
-                    color = Color(0xFF0288D1),
-                    strokeWidth = 3.dp
-                )
-            } else {
-                Surface(
-                    shape = CircleShape,
-                    border = ButtonDefaults.outlinedButtonBorder,
+                // Back button (left aligned)
+                Row(
                     modifier = Modifier
-                        .size(50.dp)
-                        .clickable(enabled = !isEmailSignUpLoading) {
-                            val signInIntent = googleSignInClient.signInIntent
-                            launcher.launch(signInIntent)
-                        }
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.google_logo),
-                        contentDescription = "Google Sign In",
-                        modifier = Modifier.padding(8.dp)
-                    )
+                    IconButton(
+                        onClick = {
+                            if (activity != null) {
+                                val intent = Intent(activity, LoginActivity::class.java)
+                                activity.startActivity(intent)
+                                activity.finish()
+                            }
+                        },
+                        enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray else Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
+
+                // Centered Title
+                Text(
+                    text = "Create New Account",
+                    modifier = Modifier.align(Alignment.Center),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0288D1)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // ✅ Scrollable Content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Row {
-            Text("Already have an account? ", fontSize = 14.sp, color = Color.Gray)
-            Text(
-                text = "Back to Log In",
-                color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray else Color(0xFF0288D1),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable(enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading) {
-                    val intent = Intent(activity, LoginActivity::class.java)
-                    activity.startActivity(intent)
-                    activity.finish()
+            // ✅ Full Name Field with Label
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Full Name",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = fullName,
+                    onValueChange = { fullName = it },
+                    placeholder = { Text("John Doe", color = Color.Gray.copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF0288D1),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ✅ Email Field with Label
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Email Address",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        emailValidation = validateEmail(it)
+                        showEmailRequirements = it.isNotEmpty()
+                        emailAlreadyExists = false // Reset when user types
+                    },
+                    placeholder = { Text("example@gmail.com", color = Color.Gray.copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
+                    isError = (showEmailRequirements && !emailValidation.isValid()) || emailAlreadyExists,
+                    trailingIcon = {
+                        if (isCheckingEmail) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color(0xFF0288D1),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF0288D1),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f),
+                        errorBorderColor = MaterialTheme.colorScheme.error
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            // ✅ Email Requirements Indicator
+            if (showEmailRequirements && !emailValidation.isValid()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Valid email must have:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.DarkGray
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        EmailRequirementItem("Not empty", emailValidation.isNotEmpty)
+                        EmailRequirementItem("Contains @ symbol", emailValidation.hasAtSymbol)
+                        EmailRequirementItem("Valid domain (e.g., gmail.com)", emailValidation.hasDomain)
+                    }
                 }
-            )
-        }
+            }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            // ✅ Email Already Exists Message
+            if (emailAlreadyExists) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = null,
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Email already registered",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFD32F2F)
+                            )
+                            Text(
+                                text = "This email is already in use. Please use a different email or try logging in.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF666666),
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ✅ Password Field with Label
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Password",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        passwordValidation = validatePassword(it)
+                        showPasswordRequirements = it.isNotEmpty()
+                    },
+                    placeholder = { Text("Enter your password", color = Color.Gray.copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { passwordVisible = !passwordVisible },
+                            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
+                        ) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                contentDescription = "Toggle Password",
+                                tint = Color.Gray
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF0288D1),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            // ✅ Password Requirements Indicator
+            if (showPasswordRequirements) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Password must contain:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.DarkGray
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        PasswordRequirementItem("At least 8 characters", passwordValidation.hasMinLength)
+                        PasswordRequirementItem("One uppercase letter (A-Z)", passwordValidation.hasUpperCase)
+                        PasswordRequirementItem("One lowercase letter (a-z)", passwordValidation.hasLowerCase)
+                        PasswordRequirementItem("One number (0-9)", passwordValidation.hasDigit)
+                        PasswordRequirementItem("One special character (!@#$%^&*)", passwordValidation.hasSpecialChar)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ✅ Confirm Password Field with Label
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Confirm Password",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = { Text("Confirm your password", color = Color.Gray.copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading,
+                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { confirmPasswordVisible = !confirmPasswordVisible },
+                            enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
+                        ) {
+                            Icon(
+                                imageVector = if (confirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                contentDescription = "Toggle Password",
+                                tint = Color.Gray
+                            )
+                        }
+                    },
+                    isError = confirmPassword.isNotEmpty() && password != confirmPassword,
+                    supportingText = {
+                        if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+                            Text(
+                                text = "Passwords do not match",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF0288D1),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ✅ Terms Checkbox with Clickable Links
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Checkbox(
+                    checked = agreeTerms,
+                    onCheckedChange = { agreeTerms = it },
+                    enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading
+                )
+                Text(
+                    text = buildAnnotatedString {
+                        append("I agree to ")
+                        withStyle(style = SpanStyle(color = Color(0xFF0288D1), fontWeight = FontWeight.Bold)) {
+                            append("Terms and Conditions")
+                        }
+                        append(" and have read the ")
+                        withStyle(style = SpanStyle(color = Color(0xFF0288D1), fontWeight = FontWeight.Bold)) {
+                            append("Privacy Policy")
+                        }
+                    },
+                    fontSize = 14.sp,
+                    color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray else Color.Black,
+                    modifier = Modifier.clickable(enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading) {
+                        showTermsDialog = true
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ✅ Sign Up Button
+            Button(
+                onClick = {
+                    if (activity == null || auth == null || db == null) return@Button
+
+                    if (fullName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
+                        Toast.makeText(activity, "All fields are required.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (!emailValidation.isValid()) {
+                        Toast.makeText(activity, "Please enter a valid email address.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (!passwordValidation.isValid()) {
+                        Toast.makeText(activity, "Password does not meet the requirements.", Toast.LENGTH_LONG).show()
+                        return@Button
+                    }
+
+                    if (password != confirmPassword) {
+                        Toast.makeText(activity, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (!agreeTerms) {
+                        Toast.makeText(activity, "You must agree to the terms.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // ✅ Check if email already exists
+                    isCheckingEmail = true
+                    auth.fetchSignInMethodsForEmail(email)
+                        .addOnCompleteListener { task ->
+                            isCheckingEmail = false
+                            if (task.isSuccessful) {
+                                val signInMethods = task.result?.signInMethods
+                                if (!signInMethods.isNullOrEmpty()) {
+                                    // Email already exists
+                                    emailAlreadyExists = true
+                                } else {
+                                    // Email is available, proceed with registration
+                                    isEmailSignUpLoading = true
+
+                                    auth.createUserWithEmailAndPassword(email, password)
+                                        .addOnCompleteListener { createTask ->
+                                            if (createTask.isSuccessful) {
+                                                val user = auth.currentUser
+                                                val userId = user?.uid
+
+                                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                                    .setDisplayName(fullName)
+                                                    .build()
+                                                user?.updateProfile(profileUpdates)
+
+                                                val userData = hashMapOf(
+                                                    "fullName" to fullName,
+                                                    "email" to email,
+                                                    "profession" to "",
+                                                    "photoUrl" to ""
+                                                )
+
+                                                if (userId != null) {
+                                                    db.collection("users").document(userId)
+                                                        .set(userData)
+                                                        .addOnSuccessListener {
+                                                            isEmailSignUpLoading = false
+                                                            val intent = Intent(activity, DetailActivity::class.java)
+                                                            activity.startActivity(intent)
+                                                            activity.finish()
+                                                        }
+                                                        .addOnFailureListener {
+                                                            isEmailSignUpLoading = false
+                                                            Toast.makeText(activity, "Failed to save user data.", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                }
+                                            } else {
+                                                isEmailSignUpLoading = false
+                                                Toast.makeText(activity, "Sign up failed: ${createTask.exception?.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                }
+                            } else {
+                                Toast.makeText(activity, "Error checking email: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                },
+                enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading && !isCheckingEmail,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF0288D1),
+                    disabledContainerColor = Color(0xFF0288D1).copy(alpha = 0.6f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(25.dp)
+            ) {
+                if (isEmailSignUpLoading || isCheckingEmail) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("SIGN UP", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "Or continue with",
+                color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray.copy(alpha = 0.5f) else Color.Gray,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Google Sign-In Button
+            Box(
+                modifier = Modifier.size(50.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isGoogleSignUpLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(50.dp),
+                        color = Color(0xFF0288D1),
+                        strokeWidth = 3.dp
+                    )
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clickable(enabled = !isEmailSignUpLoading && googleSignInClient != null) {
+                                if (googleSignInClient != null) {
+                                    val signInIntent = googleSignInClient.signInIntent
+                                    launcher.launch(signInIntent)
+                                }
+                            }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.google_logo),
+                                contentDescription = "Google Sign In",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row {
+                Text("Already have an account? ", fontSize = 14.sp, color = Color.Gray)
+                Text(
+                    text = "Back to Log In",
+                    color = if (isEmailSignUpLoading || isGoogleSignUpLoading) Color.Gray else Color(0xFF0288D1),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable(enabled = !isEmailSignUpLoading && !isGoogleSignUpLoading && activity != null) {
+                        if (activity != null) {
+                            val intent = Intent(activity, LoginActivity::class.java)
+                            activity.startActivity(intent)
+                            activity.finish()
+                        }
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
-// ✅ NEW: Terms and Conditions Dialog
+// ✅ Terms and Conditions Dialog
 @Composable
 fun TermsDialog(onDismiss: () -> Unit, title: String) {
     Dialog(onDismissRequest = onDismiss) {
@@ -508,7 +748,6 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Header
                 Text(
                     text = title,
                     fontSize = 20.sp,
@@ -517,9 +756,8 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
                     modifier = Modifier.padding(16.dp)
                 )
 
-                Divider()
+                HorizontalDivider()
 
-                // Scrollable Content
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -577,9 +815,8 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
                     )
                 }
 
-                Divider()
+                HorizontalDivider()
 
-                // Close Button
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier
@@ -595,7 +832,7 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
     }
 }
 
-// ✅ NEW: Privacy Policy Dialog
+// ✅ Privacy Policy Dialog
 @Composable
 fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
     Dialog(onDismissRequest = onDismiss) {
@@ -609,7 +846,6 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Header
                 Text(
                     text = title,
                     fontSize = 20.sp,
@@ -618,9 +854,8 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
                     modifier = Modifier.padding(16.dp)
                 )
 
-                Divider()
+                HorizontalDivider()
 
-                // Scrollable Content
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -696,9 +931,8 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
                     )
                 }
 
-                Divider()
+                HorizontalDivider()
 
-                // Close Button
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier
@@ -736,16 +970,37 @@ fun PasswordRequirementItem(text: String, isMet: Boolean) {
     }
 }
 
+// ✅ Email Requirement Item Composable
+@Composable
+fun EmailRequirementItem(text: String, isMet: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Icon(
+            imageVector = if (isMet) Icons.Filled.Check else Icons.Filled.Close,
+            contentDescription = null,
+            tint = if (isMet) Color(0xFF4CAF50) else Color(0xFFFF9800),
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = if (isMet) Color(0xFF4CAF50) else Color(0xFF666666)
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun RegisterScreenPreview() {
-    RegisterScreen(
-        activity = object : ComponentActivity() {},
-        auth = FirebaseAuth.getInstance(),
-        db = FirebaseFirestore.getInstance(),
-        googleSignInClient = GoogleSignIn.getClient(
-            object : ComponentActivity() {},
-            GoogleSignInOptions.DEFAULT_SIGN_IN
+    MaterialTheme {
+        RegisterScreen(
+            activity = null,
+            auth = null,
+            db = null,
+            googleSignInClient = null
         )
-    )
+    }
 }
