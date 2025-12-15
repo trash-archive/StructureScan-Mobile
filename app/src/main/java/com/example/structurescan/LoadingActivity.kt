@@ -198,7 +198,7 @@ fun LoadingScreen(onTimeout: () -> Unit) {
             )
 
             Text(
-                text = "Version 1.0",
+                text = "Version 1.0.1",
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Light,

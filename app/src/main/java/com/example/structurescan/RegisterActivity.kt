@@ -774,18 +774,16 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
                         2. User Accounts
                         • You must provide accurate and complete information during registration
                         • You are responsible for maintaining the confidentiality of your account credentials
-                        • You must be at least 18 years old to create an account
 
                         3. User Conduct
                         You agree not to:
                         • Upload false, inaccurate, or misleading information
                         • Use the service for any illegal purposes
                         • Attempt to gain unauthorized access to our systems
-                        • Share your account with others
 
                         4. Data and Privacy
                         • We collect and process your personal data in accordance with our Privacy Policy
-                        • Profile photos and inspection data are stored securely on Firebase servers
+                        • Profile photos and inspection data are stored securely on our servers
                         • You retain ownership of your uploaded content
 
                         5. Service Availability
@@ -807,7 +805,7 @@ fun TermsDialog(onDismiss: () -> Unit, title: String) {
                         We reserve the right to suspend or terminate accounts that violate these terms.
 
                         10. Contact
-                        For questions about these terms, please contact our support team through the app.
+                        For questions about these terms, please contact our support team through our email at structurescanapp@gmail.com.
                         """.trimIndent(),
                         fontSize = 14.sp,
                         color = Color.DarkGray,
@@ -880,10 +878,9 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
                         • Authenticate your account
                         • Store and organize your inspection data
                         • Improve app functionality and user experience
-                        • Send important service notifications
 
                         3. Data Storage and Security
-                        • All data is encrypted and stored on Firebase servers
+                        • All data is encrypted and stored on our servers
                         • We use industry-standard security measures
                         • Profile images are stored in Firebase Cloud Storage
                         • User credentials are handled by Firebase Authentication
@@ -903,8 +900,6 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
                         You have the right to:
                         • Access your personal data
                         • Update or correct your information
-                        • Delete your account and associated data
-                        • Export your data
 
                         6. Cookies and Tracking
                         • We use Firebase Analytics to understand app usage
@@ -916,14 +911,11 @@ fun PrivacyDialog(onDismiss: () -> Unit, title: String) {
                         • Firebase (Google) for authentication and data storage
                         • Google Sign-In for authentication
 
-                        8. Children's Privacy
-                        Our service is not intended for users under 18 years of age.
-
                         9. Changes to Privacy Policy
                         We will notify users of any material changes to this policy.
 
                         10. Contact Us
-                        For privacy concerns, contact us through the app support feature.
+                        For privacy concerns, contact us through our email structurescanapp@gmail.com.
                         """.trimIndent(),
                         fontSize = 14.sp,
                         color = Color.DarkGray,

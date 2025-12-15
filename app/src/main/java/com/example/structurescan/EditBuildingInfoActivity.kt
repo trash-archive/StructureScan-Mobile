@@ -113,7 +113,7 @@ class EditBuildingInfoActivity : ComponentActivity() {
                     .document(documentId)
                     .update(updatedData)
                     .addOnSuccessListener {
-                        Toast.makeText(this, "✓ Building information updated successfully!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Building information updated successfully!", Toast.LENGTH_SHORT).show()
 
                         // ✅ Return to AssessmentResultsActivity with updated data
                         val resultIntent = Intent().apply {

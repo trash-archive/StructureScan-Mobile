@@ -260,15 +260,18 @@ class AssessmentDetailsActivity : ComponentActivity() {
         return when (key) {
             // ✅ UPDATED: Spalling (was Crack-High)
             "Spalling-High" -> DamageRecommendation(
-                title = "Critical Structural Spalling",
-                description = "Severe concrete spalling indicating possible structural deterioration or rebar exposure.",
+                title = "Serious Concrete Damage",
+                description = "Concrete is breaking away from the surface, possibly exposing metal bars inside. This needs urgent attention from a building expert.",
                 severity = "HIGH",
                 actions = listOf(
-                    "Consult licensed structural engineer immediately",
-                    "Monitor spalling progression weekly",
-                    "Avoid loading affected areas",
-                    "Check for exposed reinforcement bars",
-                    "Document with photos for comparison"
+                    "Call a structural engineer or building expert within 2-3 days",
+                    "Take clear photos of the damaged area from different angles",
+                    "Check if you can see any metal bars (rebar) showing through - avoid using this area",
+                    "Measure the damage - if deeper than 1 inch or larger than your hand, it needs professional repair",
+                    "Tap around the area gently - if it sounds hollow, more concrete might be loose",
+                    "Look for what's causing it: water leaks, cracks, or drainage problems",
+                    "Professional will: remove damaged concrete, clean metal bars, fill with repair cement",
+                    "After repair: seal the surface to protect it from water and prevent future damage"
                 ),
                 severityColor = Color(0xFFD32F2F),
                 severityBgColor = Color(0xFFFFEBEE)
@@ -276,15 +279,19 @@ class AssessmentDetailsActivity : ComponentActivity() {
 
             // ✅ UPDATED: Major Crack (was Crack-Moderate)
             "Major Crack-High" -> DamageRecommendation(
-                title = "Major Structural Crack",
-                description = "Significant cracking from foundation settlement or structural stress requiring immediate attention.",
+                title = "Large Crack Found",
+                description = "Wide crack detected (wider than 3mm or about 1/8 inch). This could mean the foundation is settling or the structure is under stress. Get a building expert to check it out.",
                 severity = "HIGH",
                 actions = listOf(
-                    "Consult structural engineer within 7 days",
-                    "Monitor crack width and progression",
-                    "Seal cracks to prevent water infiltration",
-                    "Schedule professional inspection",
-                    "Check for underlying moisture issues"
+                    "Contact a structural engineer or building expert within 1-2 weeks",
+                    "Put markers on both sides of the crack to see if it's getting bigger",
+                    "Measure and photograph the crack - note how wide, how long, and where it is",
+                    "Check if doors or windows are sticking, or if floors are sloping",
+                    "Look for water problems: check gutters, downspouts, and drainage around your building",
+                    "Notice the crack direction: straight up (settling), sideways (pressure), or diagonal (twisting)",
+                    "Expert may inject special material to fill the crack or strengthen the structure",
+                    "Fix the root cause: improve drainage, stabilize foundation, or reduce soil pressure",
+                    "Seal the crack after repair to keep water out and prevent freeze damage"
                 ),
                 severityColor = Color(0xFFD32F2F),
                 severityBgColor = Color(0xFFFFEBEE)
@@ -292,14 +299,18 @@ class AssessmentDetailsActivity : ComponentActivity() {
 
             // ✅ UPDATED: Minor Crack (was Crack-Low)
             "Minor Crack-Low" -> DamageRecommendation(
-                title = "Minor Surface Cracking",
-                description = "Hairline cracks consistent with normal aging and minor settlement.",
+                title = "Small Hairline Crack/s",
+                description = "Thin cracks found - these are common as buildings settle and concrete dries. Usually not serious, but keep an eye on them.",
                 severity = "LOW",
                 actions = listOf(
-                    "Include in routine maintenance inspections",
-                    "Monitor for any expansion over time",
-                    "Seal surface cracks during next maintenance cycle",
-                    "No immediate structural concern"
+                    "Check these cracks once or twice a year during regular building inspections",
+                    "Watch if the crack gets bigger over 6-12 months - mark the ends and take photos with a ruler",
+                    "Fill the cracks during your next scheduled maintenance to stop water getting in",
+                    "Use flexible crack filler that works for indoor or outdoor use",
+                    "Make sure water drains properly away from your building",
+                    "If the crack grows wider than 2mm (about 1/16 inch), call a building expert",
+                    "Keep notes and photos of where the crack is and what it looks like",
+                    "No need to worry - these small cracks are normal in concrete and brick buildings"
                 ),
                 severityColor = Color(0xFF388E3C),
                 severityBgColor = Color(0xFFE8F5E9)
@@ -307,15 +318,20 @@ class AssessmentDetailsActivity : ComponentActivity() {
 
             // ✅ UPDATED: Paint Damage (was Paint-Detected, now LOW risk)
             "Paint Damage-Low" -> DamageRecommendation(
-                title = "Paint Surface Deterioration",
-                description = "Minor paint damage requiring cosmetic maintenance.",
+                title = "Paint Peeling or Flaking",
+                description = "Paint is coming off the surface. Usually caused by water damage or old paint. Mostly cosmetic, but fix the water source first to prevent it from happening again.",
                 severity = "LOW",
                 actions = listOf(
-                    "Schedule repainting during next maintenance",
-                    "Check for minor moisture underneath",
-                    "Clean and prepare surface before repainting",
-                    "Use weather-resistant paint for exterior",
-                    "No structural concern"
+                    "Plan to repaint within 12-24 months during regular maintenance",
+                    "Find and fix the water problem FIRST: look for leaks, bad drainage, or too much humidity",
+                    "Proper fix steps: scrape off loose paint, clean the surface, apply primer, then paint",
+                    "Make sure the surface is completely dry before repainting",
+                    "Choose the right paint: mildew-resistant for bathrooms/kitchens, weather-resistant for outside",
+                    "Add better airflow in damp areas (install fans or open windows more often)",
+                    "For outside: keep gutters clean, make sure wood isn't touching the ground",
+                    "Use bonding primer so new paint sticks properly",
+                    "Seal gaps and joints with good quality sealant after painting",
+                    "This is a cosmetic issue - no safety concerns, just maintenance needed"
                 ),
                 severityColor = Color(0xFF388E3C),
                 severityBgColor = Color(0xFFE8F5E9)
@@ -324,32 +340,40 @@ class AssessmentDetailsActivity : ComponentActivity() {
             // ✅ UPDATED: Algae (still MODERATE risk)
             "Algae-Moderate" -> DamageRecommendation(
                 title = "Algae/Moss Growth",
-                description = "Biological growth indicating moisture presence and potential drainage issues.",
+                description = "Algae or moss growing on the building means there's too much moisture. Not immediately dangerous, but can damage materials over time if you don't clean it and fix the water problem.",
                 severity = "MODERATE",
                 actions = listOf(
-                    "Clean with appropriate biocide solution",
-                    "Identify and fix moisture source",
-                    "Improve drainage around affected area",
-                    "Trim vegetation to increase sunlight exposure",
-                    "Apply anti-algae treatment after cleaning"
+                    "Clean the area within 1-2 months using algae remover or cleaning solution",
+                    "Cleaning method: gently wash with garden hose and soft brush - DON'T use pressure washer on delicate surfaces",
+                    "Cleaning solutions you can use: bleach mixed with water (50/50) OR vinegar solution (2 gallons water + 2-3 cups white vinegar)",
+                    "Let the cleaning solution sit for 15-20 minutes, gently scrub, then rinse well",
+                    "Find and fix why it's wet: improve drainage, fix gutters, repair any roof leaks",
+                    "Cut back trees and bushes so more sunlight reaches the wall and air can flow",
+                    "Make sure ground slopes away from building so water runs off",
+                    "You can apply special coating to prevent algae from growing back",
+                    "Check again in 6-12 months to make sure the moisture problem is fixed",
+                    "If algae keeps coming back, you may need to seal the surface with breathable, water-repellent coating"
                 ),
                 severityColor = Color(0xFFF57C00),
-                severityBgColor = Color(0xFFF3E0)
+                severityBgColor = Color(0xFFFFF3E0)
             )
 
             // ✅ Default fallback
             else -> DamageRecommendation(
-                title = "General Maintenance Required",
-                description = "Area requires attention and regular monitoring.",
-                severity = "MODERATE",
+                title = "Clean Surface",
+                description = "No structural damage or surface deterioration detected. Building surface appears well-maintained and in good condition. Continue routine preventive maintenance to preserve structural integrity.",
+                severity = "GOOD",
                 actions = listOf(
-                    "Conduct detailed visual inspection",
-                    "Address any moisture issues",
-                    "Schedule professional assessment if needed",
-                    "Document condition for future reference"
+                    "Continue regular maintenance schedule (annual or bi-annual inspections)",
+                    "Monitor during routine inspections for any emerging issues",
+                    "Maintain proper drainage and moisture control measures",
+                    "Keep gutters and downspouts clear and functional",
+                    "Ensure vegetation is trimmed back from building surfaces",
+                    "Address any new cracks, stains, or deterioration promptly",
+                    "No immediate action required - building surface in good condition"
                 ),
-                severityColor = Color(0xFFF57C00),
-                severityBgColor = Color(0xFFFFF3E0)
+                severityColor = Color(0xFF2E7D32),
+                severityBgColor = Color(0xFFE8F5E9)
             )
         }
     }
@@ -620,7 +644,7 @@ fun AssessmentDetailsScreen(
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    "Tap the edit icon above to add details about your structure for more accurate assessments.",
+                                    "Tap the edit icon above to add details about your structure.",
                                     fontSize = 14.sp,
                                     color = Color(0xFF6B7280),
                                     textAlign = TextAlign.Center,
@@ -828,21 +852,48 @@ fun AssessmentDetailsScreen(
                     Log.d("AssessmentDetails", "Total issues across all images: ${allIssues.size}")
 
                     if (allIssues.isEmpty()) {
-                        DetailsRecommendationCard(
-                            rec = DamageRecommendation(
-                                title = "No Significant Issues",
-                                description = "This structure appears to be in good condition.",
-                                severity = "GOOD",
-                                actions = listOf(
-                                    "Continue regular maintenance",
-                                    "Include in routine inspections"
-                                ),
-                                severityColor = Color(0xFF388E3C),
-                                severityBgColor = Color(0xFFE8F5E9)
-                            ),
-                            confidence = 1.0f,
-                            damageLevel = "Low"
-                        )
+                        // ✅ MODIFIED: Clean card for no issues detected
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "No Significant Issues",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            "GOOD",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF388E3C)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "This structure appears to be in good condition.",
+                                    fontSize = 13.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
                     } else {
                         // ✅ Group by damage type AND level to show each unique issue type once
                         val grouped = allIssues.groupBy { "${it.damageType}-${it.damageLevel}" }
@@ -857,7 +908,8 @@ fun AssessmentDetailsScreen(
                             DetailsRecommendationCard(
                                 rec = rec,
                                 confidence = avgConf,
-                                damageLevel = first.damageLevel
+                                damageLevel = first.damageLevel,
+                                locationCount = issuesList.size  // ✅ ADD: Pass the location count
                             )
                         }
                     }
@@ -995,7 +1047,7 @@ fun AssessmentDetailsScreen(
 
                         val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
                         if (pdfPath != null) {
-                            Toast.makeText(context, "✓ PDF saved!", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "PDF saved to Downloads folder!", Toast.LENGTH_LONG).show()
                         } else {
                             Toast.makeText(context, "Failed to generate PDF", Toast.LENGTH_SHORT).show()
                         }
@@ -1025,7 +1077,12 @@ fun DetailsSummaryRow(label: String, value: String) {
 }
 
 @Composable
-fun DetailsRecommendationCard(rec: DamageRecommendation, confidence: Float, damageLevel: String) {
+fun DetailsRecommendationCard(
+    rec: DamageRecommendation,
+    confidence: Float,
+    damageLevel: String,
+    locationCount: Int = 1
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1035,12 +1092,18 @@ fun DetailsRecommendationCard(rec: DamageRecommendation, confidence: Float, dama
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header Section
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(rec.title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    rec.title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
                 Box(
                     modifier = Modifier
                         .background(rec.severityBgColor, RoundedCornerShape(4.dp))
@@ -1054,34 +1117,137 @@ fun DetailsRecommendationCard(rec: DamageRecommendation, confidence: Float, dama
                     )
                 }
             }
+
             Spacer(Modifier.height(8.dp))
-            Text(rec.description, fontSize = 13.sp, color = Color.Gray)
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("AI Confidence", fontSize = 12.sp, color = Color.Gray)
-                Spacer(Modifier.width(8.dp))
-                LinearProgressIndicator(
-                    progress = confidence,
-                    modifier = Modifier.weight(1f).height(6.dp),
-                    color = detailsGetConfidenceColor(damageLevel),
-                    trackColor = Color(0xFFE0E0E0)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("${(confidence * 100).toInt()}%", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text("Recommended Actions:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            rec.actions.forEach { action ->
-                Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color(0xFF388E3C),
-                        modifier = Modifier.size(16.dp)
+            Text(rec.description, fontSize = 13.sp, color = Color.Gray, lineHeight = 18.sp)
+
+            Spacer(Modifier.height(16.dp))
+
+            // AI Confidence Section
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("AI Confidence", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = confidence,
+                        modifier = Modifier.width(100.dp).height(6.dp),
+                        color = detailsGetConfidenceColor(damageLevel),
+                        trackColor = Color(0xFFE0E0E0)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(action, fontSize = 13.sp, color = Color.Gray)
+                    Text(
+                        text = "${(confidence * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.Gray,
+                        modifier = Modifier.widthIn(min = 40.dp)
+                    )
+                }
+            }
+
+            // ✅ IMPROVED: Add divider and better spacing before actions
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = Color(0xFFE5E7EB), thickness = 1.dp)
+            Spacer(Modifier.height(16.dp))
+
+            // ✅ IMPROVED: Better formatted actions section
+            Text(
+                "Recommended Actions",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F2937)
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // ✅ IMPROVED: Each action in a card with better spacing
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rec.actions.forEachIndexed { index, action ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFF9FAFB)
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            // ✅ IMPROVED: Numbered circles instead of just checks
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(
+                                        Color(0xFF10B981),
+                                        RoundedCornerShape(12.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "${index + 1}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                action,
+                                fontSize = 13.sp,
+                                color = Color(0xFF374151),
+                                lineHeight = 20.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ✅ Location counter (only show if > 1)
+            if (locationCount > 1) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Color(0xFFE5E7EB))
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color(0xFF6366F1),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Detected Locations",
+                            fontSize = 13.sp,
+                            color = Color(0xFF374151),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFEEF2FF), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            "$locationCount images",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF6366F1)
+                        )
+                    }
                 }
             }
         }
@@ -1264,7 +1430,7 @@ fun DetailsAnalyzedImageCard(imageNumber: Int, assessment: DetailImageAssessment
                 }
                 assessment.detectedIssues.isEmpty() -> {
                     Text(
-                        "No significant issues detected.",
+                        "No clear detection - Review image quality.",
                         fontSize = 13.sp,
                         color = Color.Gray,
                         modifier = Modifier.padding(vertical = 8.dp)
