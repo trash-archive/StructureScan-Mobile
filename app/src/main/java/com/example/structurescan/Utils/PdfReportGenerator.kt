@@ -22,18 +22,11 @@ data class PdfAssessmentData(
     val date: String,
     val overallRisk: String,
     val totalIssues: Int,
-
-    // ✅ Crack - KEEP the severity levels (High/Moderate/Low)
     val crackHighCount: Int,
     val crackModerateCount: Int,
     val crackLowCount: Int,
-
-    // ✅ Paint - MERGE into single count (no severity levels)
     val paintCount: Int,
-
-    // ✅ Algae - MERGE into single count (no severity levels)
     val algaeCount: Int,
-
     val buildingType: String = "",
     val constructionYear: String = "",
     val renovationYear: String = "",
@@ -252,8 +245,10 @@ object PdfReportGenerator {
             if (data.totalIssues > 0) {
                 append("${data.totalIssues} areas of concern detected. ")
                 val details = mutableListOf<String>()
-                if (data.crackHighCount > 0) details.add("${data.crackHighCount} high-risk cracks")
-                // ✅ FIXED: Use merged counts
+                // ✅ FIXED: Show ALL crack types
+                if (data.crackHighCount > 0) details.add("${data.crackHighCount} serious concrete damage")
+                if (data.crackModerateCount > 0) details.add("${data.crackModerateCount} large cracks")
+                if (data.crackLowCount > 0) details.add("${data.crackLowCount} small hairline cracks")
                 if (data.paintCount > 0) details.add("${data.paintCount} paint damage areas")
                 if (data.algaeCount > 0) details.add("${data.algaeCount} algae/moss areas")
                 if (details.isNotEmpty()) append(details.joinToString(", ") + ".")
@@ -350,7 +345,6 @@ object PdfReportGenerator {
             color = android.graphics.Color.BLACK
         }
 
-        // ✅ Crack - still has severity breakdown
         if (data.crackHighCount + data.crackModerateCount + data.crackLowCount > 0) {
             canvas.drawText("Crack Damage:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
@@ -360,7 +354,6 @@ object PdfReportGenerator {
             yPos += LINE_HEIGHT
         }
 
-        // ✅ FIXED: Paint - single merged count
         if (data.paintCount > 0) {
             canvas.drawText("Paint Damage:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
@@ -370,7 +363,6 @@ object PdfReportGenerator {
             yPos += LINE_HEIGHT
         }
 
-        // ✅ FIXED: Algae - single merged count
         if (data.algaeCount > 0) {
             canvas.drawText("Algae/Moss:", MARGIN.toFloat(), yPos.toFloat(), paint)
             canvas.drawText(
@@ -408,16 +400,11 @@ object PdfReportGenerator {
 
         val recommendations = mutableListOf<Triple<String, Int, String>>()
 
-        // ✅ Crack recommendations - KEEP severity levels
-        if (data.crackHighCount > 0) recommendations.add(Triple("Structural Crack (High Risk)", data.crackHighCount, "HIGH"))
-        if (data.crackModerateCount > 0) recommendations.add(Triple("Thermal Cracking (Moderate Risk)", data.crackModerateCount, "MODERATE"))
-        if (data.crackLowCount > 0) recommendations.add(Triple("Surface Wear (Low Risk)", data.crackLowCount, "LOW"))
-
-        // ✅ FIXED: Paint recommendations - MERGED
-        if (data.paintCount > 0) recommendations.add(Triple("Paint Damage Issues", data.paintCount, "GENERAL"))
-
-        // ✅ FIXED: Algae recommendations - MERGED
-        if (data.algaeCount > 0) recommendations.add(Triple("Algae/Moss Issues", data.algaeCount, "GENERAL"))
+        if (data.crackHighCount > 0) recommendations.add(Triple("Serious Concrete Damage", data.crackHighCount, "HIGH"))
+        if (data.crackModerateCount > 0) recommendations.add(Triple("Large Crack Found", data.crackModerateCount, "HIGH"))
+        if (data.crackLowCount > 0) recommendations.add(Triple("Small Hairline Crack/s", data.crackLowCount, "LOW"))
+        if (data.paintCount > 0) recommendations.add(Triple("Paint Peeling or Flaking", data.paintCount, "LOW"))
+        if (data.algaeCount > 0) recommendations.add(Triple("Algae/Moss Growth", data.algaeCount, "MODERATE"))
 
         if (recommendations.isEmpty()) {
             canvas.drawText("✓ No Issues Detected", MARGIN.toFloat(), yPos.toFloat(), titlePaint)
@@ -438,8 +425,11 @@ object PdfReportGenerator {
 
             val actions = getRecommendationActions(title)
             actions.forEach { action ->
-                canvas.drawText("  - $action", (MARGIN + 10).toFloat(), yPos.toFloat(), textPaint)
-                yPos += LINE_HEIGHT
+                val wrappedLines = wrapText("- $action", textPaint, PAGE_WIDTH - 2 * MARGIN - 20)
+                wrappedLines.forEach { line ->
+                    canvas.drawText("  $line", (MARGIN + 10).toFloat(), yPos.toFloat(), textPaint)
+                    yPos += LINE_HEIGHT
+                }
             }
             yPos += 5
         }
@@ -448,37 +438,78 @@ object PdfReportGenerator {
     }
 
     private fun getRecommendationActions(title: String): List<String> {
-        return when {
-            title.contains("Structural Crack") -> listOf(
-                "Consult structural engineer within 30 days",
-                "Monitor crack progression weekly"
+        return when (title) {
+            "Serious Concrete Damage" -> listOf(
+                "Call a structural engineer or building expert within 2-3 days",
+                "Take clear photos of the damaged area from different angles",
+                "Check if you can see any metal bars (rebar) showing through - avoid using this area",
+                "Measure the damage - if deeper than 1 inch or larger than your hand, it needs professional repair",
+                "Tap around the area gently - if it sounds hollow, more concrete might be loose",
+                "Look for what's causing it: water leaks, cracks, or drainage problems",
+                "Professional will: remove damaged concrete, clean metal bars, fill with repair cement",
+                "After repair: seal the surface to protect it from water and prevent future damage"
             )
-            title.contains("Thermal Cracking") -> listOf(
-                "Monitor during seasonal changes",
-                "Seal cracks to prevent water infiltration"
+
+            "Large Crack Found" -> listOf(
+                "Contact a structural engineer or building expert within 1-2 weeks",
+                "Put markers on both sides of the crack to see if it's getting bigger",
+                "Measure and photograph the crack - note how wide, how long, and where it is",
+                "Check if doors or windows are sticking, or if floors are sloping",
+                "Look for water problems: check gutters, downspouts, and drainage around your building",
+                "Notice the crack direction: straight up (settling), sideways (pressure), or diagonal (twisting)",
+                "Expert may inject special material to fill the crack or strengthen the structure",
+                "Fix the root cause: improve drainage, stabilize foundation, or reduce soil pressure",
+                "Seal the crack after repair to keep water out and prevent freeze damage"
             )
-            title.contains("Surface Wear") -> listOf(
-                "Regular building maintenance",
-                "Monitor for progression during routine inspections"
+
+            "Small Hairline Crack/s" -> listOf(
+                "Check these cracks once or twice a year during regular building inspections",
+                "Watch if the crack gets bigger over 6-12 months - mark the ends and take photos with a ruler",
+                "Fill the cracks during your next scheduled maintenance to stop water getting in",
+                "Use flexible crack filler that works for indoor or outdoor use",
+                "Make sure water drains properly away from your building",
+                "If the crack grows wider than 2mm (about 1/16 inch), call a building expert",
+                "Keep notes and photos of where the crack is and what it looks like",
+                "No need to worry - these small cracks are normal in concrete and brick buildings"
             )
-            // ✅ FIXED: Single paint recommendation
-            title.contains("Paint Damage") -> listOf(
-                "Inspect paint condition and extent of damage",
-                "Clean and prepare affected surfaces",
-                "Prime and repaint as needed",
-                "Address any underlying moisture issues"
+
+            "Paint Peeling or Flaking" -> listOf(
+                "Plan to repaint within 12-24 months during regular maintenance",
+                "Find and fix the water problem FIRST: look for leaks, bad drainage, or too much humidity",
+                "Proper fix steps: scrape off loose paint, clean the surface, apply primer, then paint",
+                "Make sure the surface is completely dry before repainting",
+                "Choose the right paint: mildew-resistant for bathrooms/kitchens, weather-resistant for outside",
+                "Add better airflow in damp areas (install fans or open windows more often)",
+                "For outside: keep gutters clean, make sure wood isn't touching the ground",
+                "Use bonding primer so new paint sticks properly",
+                "Seal gaps and joints with good quality sealant after painting",
+                "This is a cosmetic issue - no safety concerns, just maintenance needed"
             )
-            // ✅ FIXED: Single algae recommendation
-            title.contains("Algae/Moss") -> listOf(
-                "Clean affected areas with appropriate biocide",
-                "Improve drainage and air circulation",
-                "Reduce moisture sources",
-                "Increase sunlight exposure where possible"
+
+            "Algae/Moss Growth" -> listOf(
+                "Clean the area within 1-2 months using algae remover or cleaning solution",
+                "Cleaning method: gently wash with garden hose and soft brush - DON'T use pressure washer on delicate surfaces",
+                "Cleaning solutions you can use: bleach mixed with water (50/50) OR vinegar solution (2 gallons water + 2-3 cups white vinegar)",
+                "Let the cleaning solution sit for 15-20 minutes, gently scrub, then rinse well",
+                "Find and fix why it's wet: improve drainage, fix gutters, repair any roof leaks",
+                "Cut back trees and bushes so more sunlight reaches the wall and air can flow",
+                "Make sure ground slopes away from building so water runs off",
+                "You can apply special coating to prevent algae from growing back",
+                "Check again in 6-12 months to make sure the moisture problem is fixed",
+                "If algae keeps coming back, you may need to seal the surface with breathable, water-repellent coating"
             )
-            else -> listOf("Inspect closely", "Address moisture", "Schedule professional assessment")
+
+            else -> listOf(
+                "Continue regular maintenance schedule (annual or bi-annual inspections)",
+                "Monitor during routine inspections for any emerging issues",
+                "Maintain proper drainage and moisture control measures",
+                "Keep gutters and downspouts clear and functional",
+                "Ensure vegetation is trimmed back from building surfaces",
+                "Address any new cracks, stains, or deterioration promptly",
+                "No immediate action required - building surface in good condition"
+            )
         }
     }
-
 
     private fun drawImagePage(canvas: Canvas, imageUrl: String, imageNumber: Int, totalImages: Int, context: Context) {
         try {

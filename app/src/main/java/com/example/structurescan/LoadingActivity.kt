@@ -175,7 +175,7 @@ fun LoadingScreen(onTimeout: () -> Unit) {
 
             // Loading Text with pulse animation
             Text(
-                text = "Loading your workspace...",
+                text = "Loading...",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,

@@ -234,7 +234,6 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
                             DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Multiple angles")
                             DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Clear focus")
                             DoDontRow(Icons.Outlined.Search, Color(0xFF34D399), "Close-up of damage")
-                            DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Wide building shots")
                         }
                     }
 
