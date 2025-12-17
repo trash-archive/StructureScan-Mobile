@@ -5,22 +5,21 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,7 +34,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -55,8 +53,6 @@ import com.google.firebase.storage.FirebaseStorage
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
-import com.example.structurescan.Utils.PdfReportGenerator
-import com.example.structurescan.Utils.PdfAssessmentData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 
@@ -71,33 +67,29 @@ data class ImageAssessment(
     val damageType: String,
     val damageLevel: String,
     val confidence: Float,
-    // ✅ Crack damage keeps its severity levels (Low, Moderate, High)
-    val crackLowConf: Float,
-    val crackModerateConf: Float,
-    val crackHighConf: Float,
-    // ✅ Paint is now merged - single confidence value
-    val paintConf: Float = 0f,
-    // ✅ Algae is now merged - single confidence value
-    val algaeConf: Float = 0f,
-    // ✅ Plain surface detection
-    val plainConf: Float = 0f,
     val firebaseImageUrl: String = "",
     val detectedIssues: List<DetectedIssue> = emptyList(),
     val imageRisk: String = "Low"
 )
 
+data class AreaAnalysis(
+    val areaId: String,
+    val areaName: String,
+    val imageAssessments: List<ImageAssessment>,
+    val areaRisk: String
+)
+
+data class DetectionSummaryItem(
+    val damageType: String,
+    val count: Int,
+    val avgConfidence: Float
+)
+
 data class AssessmentSummary(
     val overallRisk: String,
     val totalIssues: Int,
-    // ✅ Crack damage keeps its severity level counts
-    val crackHighCount: Int,
-    val crackModerateCount: Int,
-    val crackLowCount: Int,
-    // ✅ Paint is now merged - single count
-    val paintCount: Int,
-    // ✅ Algae is now merged - single count
-    val algaeCount: Int,
-    val assessments: List<ImageAssessment>
+    val detectionSummary: List<DetectionSummaryItem>,
+    val areaAnalyses: List<AreaAnalysis>
 )
 
 data class DamageRecommendation(
@@ -115,66 +107,6 @@ class AssessmentResultsActivity : ComponentActivity() {
     private lateinit var storage: FirebaseStorage
     private var currentAssessmentId: String? = null
 
-    // Place these at the top of your activity, just after `onCreate`
-    lateinit var currentAssessmentName: MutableState<String>
-    lateinit var currentBuildingType: MutableState<String>
-    lateinit var currentConstructionYear: MutableState<String>
-    lateinit var currentRenovationYear: MutableState<String>
-    lateinit var currentFloors: MutableState<String>
-    lateinit var currentMaterial: MutableState<String>
-    lateinit var currentFoundation: MutableState<String>
-    lateinit var currentEnvironment: MutableState<String>
-    lateinit var currentPreviousIssues: MutableState<ArrayList<String>>
-    lateinit var currentOccupancy: MutableState<String>
-    lateinit var currentEnvironmentalRisks: MutableState<ArrayList<String>>
-    lateinit var currentNotes: MutableState<String>
-
-    // ✅ Activity result launcher to handle edits (final version)
-    private val editBuildingInfoLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val data = result.data
-            if (data?.getBooleanExtra("UPDATED", false) == true) {
-                lifecycleScope.launch {
-                    try {
-                        val userId = firebaseAuth.currentUser?.uid ?: return@launch
-                        val updatedName = data.getStringExtra("assessmentName") ?: return@launch
-
-                        val documents = firestore.collection("users")
-                            .document(userId)
-                            .collection("assessments")
-                            .whereEqualTo("assessmentName", updatedName)
-                            .get()
-                            .await()
-
-                        if (!documents.isEmpty) {
-                            val doc = documents.documents[0]
-
-                            // ✅ Directly update your mutable states (NO recreate, NO intent.putExtra)
-                            currentAssessmentName.value = doc.getString("assessmentName") ?: ""
-                            currentBuildingType.value = doc.getString("buildingType") ?: ""
-                            currentConstructionYear.value = doc.getString("constructionYear") ?: ""
-                            currentRenovationYear.value = doc.getString("renovationYear") ?: ""
-                            currentFloors.value = doc.getString("floors") ?: ""
-                            currentMaterial.value = doc.getString("material") ?: ""
-                            currentFoundation.value = doc.getString("foundation") ?: ""
-                            currentEnvironment.value = doc.getString("environment") ?: ""
-                            currentPreviousIssues.value = ArrayList((doc.get("previousIssues") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
-                            currentOccupancy.value = doc.getString("occupancy") ?: ""
-                            currentEnvironmentalRisks.value = ArrayList((doc.get("environmentalRisks") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
-                            currentNotes.value = doc.getString("notes") ?: ""
-
-                            Toast.makeText(this@AssessmentResultsActivity, "✓ Assessment info updated", Toast.LENGTH_SHORT).show()
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(this@AssessmentResultsActivity, "Error fetching updated data", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -182,10 +114,14 @@ class AssessmentResultsActivity : ComponentActivity() {
         firestore = FirebaseFirestore.getInstance()
         storage = FirebaseStorage.getInstance()
 
-        // ✅ FIXED: Receive String list and convert to Uri
-        val capturedImagesStrings: ArrayList<String>? = intent.getStringArrayListExtra(IntentKeys.FINAL_IMAGES)
-        val capturedImages: List<Uri> = capturedImagesStrings?.map { Uri.parse(it) } ?: emptyList()
         val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: "Unnamed Assessment"
+        val buildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS)
+        } ?: arrayListOf()
+
         val buildingType = intent.getStringExtra(IntentKeys.BUILDING_TYPE) ?: ""
         val constructionYear = intent.getStringExtra(IntentKeys.CONSTRUCTION_YEAR) ?: ""
         val renovationYear = intent.getStringExtra(IntentKeys.RENOVATION_YEAR) ?: ""
@@ -198,66 +134,35 @@ class AssessmentResultsActivity : ComponentActivity() {
         val environmentalRisks = intent.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS) ?: arrayListOf()
         val notes = intent.getStringExtra(IntentKeys.NOTES) ?: ""
 
-        // Initialize mutable states here
-        currentAssessmentName = mutableStateOf(assessmentName)
-        currentBuildingType = mutableStateOf(buildingType)
-        currentConstructionYear = mutableStateOf(constructionYear)
-        currentRenovationYear = mutableStateOf(renovationYear)
-        currentFloors = mutableStateOf(floors)
-        currentMaterial = mutableStateOf(material)
-        currentFoundation = mutableStateOf(foundation)
-        currentEnvironment = mutableStateOf(environment)
-        currentPreviousIssues = mutableStateOf(previousIssues)
-        currentOccupancy = mutableStateOf(occupancy)
-        currentEnvironmentalRisks = mutableStateOf(environmentalRisks)
-        currentNotes = mutableStateOf(notes)
-
         setContent {
             MaterialTheme {
                 AssessmentResultsScreen(
-                    capturedImages = capturedImages ?: emptyList(),
-                    assessmentName = currentAssessmentName.value,
-                    buildingType = currentBuildingType.value,
-                    constructionYear = currentConstructionYear.value,
-                    renovationYear = currentRenovationYear.value,
-                    floors = currentFloors.value,
-                    material = currentMaterial.value,
-                    foundation = currentFoundation.value,
-                    environment = currentEnvironment.value,
-                    previousIssues = currentPreviousIssues.value,
-                    occupancy = currentOccupancy.value,
-                    environmentalRisks = currentEnvironmentalRisks.value,
-                    notes = currentNotes.value,
+                    buildingAreas = buildingAreas,
+                    assessmentName = assessmentName,
+                    buildingType = buildingType,
+                    constructionYear = constructionYear,
+                    renovationYear = renovationYear,
+                    floors = floors,
+                    material = material,
+                    foundation = foundation,
+                    environment = environment,
+                    previousIssues = previousIssues,
+                    occupancy = occupancy,
+                    environmentalRisks = environmentalRisks,
+                    notes = notes,
                     onSaveToFirebase = { summary ->
                         saveAssessmentToFirebase(
                             assessmentName, summary, buildingType, constructionYear,
                             renovationYear, floors, material, foundation, environment,
                             previousIssues, occupancy, environmentalRisks, notes
                         )
-                    },
-                    onEditBuildingInfo = {
-                        val intent = Intent(this, EditBuildingInfoActivity::class.java).apply {
-                            putExtra("assessmentName", currentAssessmentName.value)
-                            putExtra(IntentKeys.BUILDING_TYPE, currentBuildingType.value)
-                            putExtra(IntentKeys.CONSTRUCTION_YEAR, currentConstructionYear.value)
-                            putExtra(IntentKeys.RENOVATION_YEAR, currentRenovationYear.value)
-                            putExtra(IntentKeys.FLOORS, currentFloors.value)
-                            putExtra(IntentKeys.MATERIAL, currentMaterial.value)
-                            putExtra(IntentKeys.FOUNDATION, currentFoundation.value)
-                            putExtra(IntentKeys.ENVIRONMENT, currentEnvironment.value)
-                            putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, currentPreviousIssues.value)
-                            putExtra(IntentKeys.OCCUPANCY, currentOccupancy.value)
-                            putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, currentEnvironmentalRisks.value)
-                            putExtra(IntentKeys.NOTES, currentNotes.value)
-                        }
-                        editBuildingInfoLauncher.launch(intent)
                     }
                 )
             }
         }
     }
 
-    private suspend fun uploadImageToStorage(imageUri: Uri, userId: String, assessmentId: String, imageIndex: Int): String? {
+    private suspend fun uploadImageToStorage(imageUri: Uri, userId: String, assessmentId: String, areaId: String, imageIndex: Int): String? {
         return try {
             val inputStream = contentResolver.openInputStream(imageUri)
             val bitmap = BitmapFactory.decodeStream(inputStream)
@@ -269,7 +174,7 @@ class AssessmentResultsActivity : ComponentActivity() {
             val imageData = baos.toByteArray()
             bitmap.recycle()
 
-            val storageRef = storage.reference.child("users/$userId/assessments/$assessmentId/image_$imageIndex.jpg")
+            val storageRef = storage.reference.child("users/$userId/assessments/$assessmentId/$areaId/image_$imageIndex.jpg")
             storageRef.putBytes(imageData).await()
             storageRef.downloadUrl.await().toString()
         } catch (e: Exception) {
@@ -277,10 +182,21 @@ class AssessmentResultsActivity : ComponentActivity() {
             null
         }
     }
+
     fun saveAssessmentToFirebase(
-        assessmentName: String, summary: AssessmentSummary, buildingType: String, constructionYear: String,
-        renovationYear: String, floors: String, material: String, foundation: String, environment: String,
-        previousIssues: List<String>, occupancy: String, environmentalRisks: List<String>, notes: String,
+        assessmentName: String,
+        summary: AssessmentSummary,
+        buildingType: String,
+        constructionYear: String,
+        renovationYear: String,
+        floors: String,
+        material: String,
+        foundation: String,
+        environment: String,
+        previousIssues: List<String>,
+        occupancy: String,
+        environmentalRisks: List<String>,
+        notes: String,
         isReanalysis: Boolean = false
     ): Boolean {
         val currentUser = firebaseAuth.currentUser
@@ -296,61 +212,69 @@ class AssessmentResultsActivity : ComponentActivity() {
                 UUID.randomUUID().toString().also { currentAssessmentId = it }
             }
 
-            val uploadedAssessments = mutableListOf<HashMap<String, Any>>()
+            val areasData = mutableListOf<HashMap<String, Any>>()
 
-            summary.assessments.forEachIndexed { index, assessment ->
-                val firebaseImageUrl = kotlinx.coroutines.runBlocking {
-                    uploadImageToStorage(assessment.imageUri, userId, assessmentId, index)
-                } ?: throw Exception("Failed to upload image ${index + 1}")
+            summary.areaAnalyses.forEach { areaAnalysis ->
+                val imagesData = mutableListOf<HashMap<String, Any>>()
 
-                // ✅ MODIFIED: Generate recommendations for all images, including Plain surfaces
-                val recommendationsForImage = if (assessment.detectedIssues.isEmpty() && assessment.plainConf > 0.30f) {
-                    // Plain surface with no issues - create a "Clean Surface" recommendation
-                    listOf(hashMapOf(
-                        "title" to "Clean Surface",
-                        "description" to "No structural damage or surface deterioration detected.",
-                        "severity" to "GOOD",
-                        "actions" to listOf(
-                            "Continue regular maintenance schedule",
-                            "Monitor during routine inspections",
-                            "No immediate action required"
-                        )
-                    ))
-                } else {
-                    // Detected issues - map them to recommendations as before
-                    assessment.detectedIssues.map { issue ->
-                        val rec = getRecommendation(issue.damageType, issue.damageLevel)
-                        hashMapOf(
-                            "title" to rec.title,
-                            "description" to rec.description,
-                            "severity" to rec.severity,
-                            "actions" to rec.actions
-                        )
+                areaAnalysis.imageAssessments.forEachIndexed { index, assessment ->
+                    val firebaseImageUrl = kotlinx.coroutines.runBlocking {
+                        uploadImageToStorage(assessment.imageUri, userId, assessmentId, areaAnalysis.areaId, index)
+                    } ?: throw Exception("Failed to upload image ${index + 1}")
+
+                    val recommendationsForImage = if (assessment.detectedIssues.isEmpty()) {
+                        listOf(hashMapOf(
+                            "title" to "Clean Surface",
+                            "description" to "No structural damage or surface deterioration detected.",
+                            "severity" to "GOOD",
+                            "actions" to listOf(
+                                "Continue regular maintenance schedule",
+                                "Monitor during routine inspections",
+                                "No immediate action required"
+                            )
+                        ))
+                    } else {
+                        assessment.detectedIssues.map { issue ->
+                            val rec = getRecommendation(issue.damageType, issue.damageLevel)
+                            hashMapOf(
+                                "title" to rec.title,
+                                "description" to rec.description,
+                                "severity" to rec.severity,
+                                "actions" to rec.actions
+                            )
+                        }
                     }
+
+                    imagesData.add(hashMapOf(
+                        "damageType" to assessment.damageType,
+                        "damageLevel" to assessment.damageLevel,
+                        "confidence" to assessment.confidence,
+                        "imageUri" to firebaseImageUrl,
+                        "localImageUri" to assessment.imageUri.toString(),
+                        "detectedIssues" to assessment.detectedIssues.map {
+                            mapOf("type" to it.damageType, "level" to it.damageLevel, "confidence" to it.confidence)
+                        },
+                        "imageRisk" to assessment.imageRisk,
+                        "recommendations" to recommendationsForImage
+                    ))
                 }
 
-                // ✅ UPDATED: Simplified confidence fields for Paint/Algae
-                uploadedAssessments.add(hashMapOf(
-                    "damageType" to assessment.damageType,
-                    "damageLevel" to assessment.damageLevel,
-                    "confidence" to assessment.confidence,
-                    "crackLowConf" to assessment.crackLowConf,
-                    "crackModerateConf" to assessment.crackModerateConf,
-                    "crackHighConf" to assessment.crackHighConf,
-                    "paintConf" to assessment.paintConf,        // ✅ Single merged value
-                    "algaeConf" to assessment.algaeConf,        // ✅ Single merged value
-                    "plainConf" to assessment.plainConf,
-                    "imageUri" to firebaseImageUrl,
-                    "localImageUri" to assessment.imageUri.toString(),
-                    "detectedIssues" to assessment.detectedIssues.map {
-                        mapOf("type" to it.damageType, "level" to it.damageLevel, "confidence" to it.confidence)
-                    },
-                    "imageRisk" to assessment.imageRisk,
-                    "recommendations" to recommendationsForImage
+                areasData.add(hashMapOf(
+                    "areaId" to areaAnalysis.areaId,
+                    "areaName" to areaAnalysis.areaName,
+                    "areaRisk" to areaAnalysis.areaRisk,
+                    "images" to imagesData
                 ))
             }
 
-            // ✅ UPDATED: Simplified summary counts for Paint/Algae
+            val detectionSummaryData = summary.detectionSummary.map { item ->
+                hashMapOf(
+                    "damageType" to item.damageType,
+                    "count" to item.count,
+                    "avgConfidence" to item.avgConfidence
+                )
+            }
+
             val assessmentData = hashMapOf(
                 "assessmentId" to assessmentId,
                 "assessmentName" to assessmentName,
@@ -359,12 +283,8 @@ class AssessmentResultsActivity : ComponentActivity() {
                 "date" to SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date()),
                 "overallRisk" to summary.overallRisk,
                 "totalIssues" to summary.totalIssues,
-                "crackHighCount" to summary.crackHighCount,
-                "crackModerateCount" to summary.crackModerateCount,
-                "crackLowCount" to summary.crackLowCount,
-                "paintCount" to summary.paintCount,              // ✅ Single count
-                "algaeCount" to summary.algaeCount,              // ✅ Single count
-                "imageCount" to summary.assessments.size,
+                "detectionSummary" to detectionSummaryData,
+                "areas" to areasData,
                 "buildingType" to buildingType,
                 "constructionYear" to constructionYear,
                 "renovationYear" to renovationYear,
@@ -375,8 +295,7 @@ class AssessmentResultsActivity : ComponentActivity() {
                 "previousIssues" to previousIssues,
                 "occupancy" to occupancy,
                 "environmentalRisks" to environmentalRisks,
-                "notes" to notes,
-                "assessments" to uploadedAssessments
+                "notes" to notes
             )
 
             kotlinx.coroutines.runBlocking {
@@ -392,7 +311,6 @@ class AssessmentResultsActivity : ComponentActivity() {
     fun getRecommendation(damageType: String, damageLevel: String): DamageRecommendation {
         val key = "$damageType-$damageLevel"
         return when (key) {
-            // ✅ UPDATED: Spalling (was Crack-High)
             "Spalling-High" -> DamageRecommendation(
                 "Serious Concrete Damage",
                 "Concrete is breaking away from the surface, possibly exposing metal bars inside. This needs urgent attention from a building expert.",
@@ -402,8 +320,6 @@ class AssessmentResultsActivity : ComponentActivity() {
                     "Take clear photos of the damaged area from different angles",
                     "Check if you can see any metal bars (rebar) showing through - avoid using this area",
                     "Measure the damage - if deeper than 1 inch or larger than your hand, it needs professional repair",
-                    "Tap around the area gently - if it sounds hollow, more concrete might be loose",
-                    "Look for what's causing it: water leaks, cracks, or drainage problems",
                     "Professional will: remove damaged concrete, clean metal bars, fill with repair cement",
                     "After repair: seal the surface to protect it from water and prevent future damage"
                 ),
@@ -411,27 +327,22 @@ class AssessmentResultsActivity : ComponentActivity() {
                 Color(0xFFFFEBEE)
             )
 
-            // ✅ UPDATED: Major Crack (was Crack-Moderate)
             "Major Crack-High" -> DamageRecommendation(
                 "Large Crack Found",
-                "Wide crack detected (wider than 3mm or about 1/8 inch). This could mean the foundation is settling or the structure is under stress. Get a building expert to check it out.",
+                "Wide crack detected (wider than 3mm or about 1/8 inch). This could mean the foundation is settling or the structure is under stress.",
                 "HIGH",
                 listOf(
                     "Contact a structural engineer or building expert within 1-2 weeks",
                     "Put markers on both sides of the crack to see if it's getting bigger",
                     "Measure and photograph the crack - note how wide, how long, and where it is",
                     "Check if doors or windows are sticking, or if floors are sloping",
-                    "Look for water problems: check gutters, downspouts, and drainage around your building",
-                    "Notice the crack direction: straight up (settling), sideways (pressure), or diagonal (twisting)",
                     "Expert may inject special material to fill the crack or strengthen the structure",
-                    "Fix the root cause: improve drainage, stabilize foundation, or reduce soil pressure",
                     "Seal the crack after repair to keep water out and prevent freeze damage"
                 ),
                 Color(0xFFD32F2F),
                 Color(0xFFFFEBEE)
             )
 
-            // ✅ UPDATED: Minor Crack (was Crack-Low)
             "Minor Crack-Low" -> DamageRecommendation(
                 "Small Hairline Crack/s",
                 "Thin cracks found - these are common as buildings settle and concrete dries. Usually not serious, but keep an eye on them.",
@@ -441,52 +352,38 @@ class AssessmentResultsActivity : ComponentActivity() {
                     "Watch if the crack gets bigger over 6-12 months - mark the ends and take photos with a ruler",
                     "Fill the cracks during your next scheduled maintenance to stop water getting in",
                     "Use flexible crack filler that works for indoor or outdoor use",
-                    "Make sure water drains properly away from your building",
-                    "If the crack grows wider than 2mm (about 1/16 inch), call a building expert",
-                    "Keep notes and photos of where the crack is and what it looks like",
                     "No need to worry - these small cracks are normal in concrete and brick buildings"
                 ),
                 Color(0xFF388E3C),
                 Color(0xFFE8F5E9)
             )
 
-            // ✅ UPDATED: Paint Damage (was Paint-Detected, now LOW risk)
             "Paint Damage-Low" -> DamageRecommendation(
                 "Paint Peeling or Flaking",
-                "Paint is coming off the surface. Usually caused by water damage or old paint. Mostly cosmetic, but fix the water source first to prevent it from happening again.",
+                "Paint is coming off the surface. Usually caused by water damage or old paint. Mostly cosmetic, but fix the water source first.",
                 "LOW",
                 listOf(
                     "Plan to repaint within 12-24 months during regular maintenance",
                     "Find and fix the water problem FIRST: look for leaks, bad drainage, or too much humidity",
                     "Proper fix steps: scrape off loose paint, clean the surface, apply primer, then paint",
-                    "Make sure the surface is completely dry before repainting",
                     "Choose the right paint: mildew-resistant for bathrooms/kitchens, weather-resistant for outside",
-                    "Add better airflow in damp areas (install fans or open windows more often)",
-                    "For outside: keep gutters clean, make sure wood isn't touching the ground",
-                    "Use bonding primer so new paint sticks properly",
-                    "Seal gaps and joints with good quality sealant after painting",
                     "This is a cosmetic issue - no safety concerns, just maintenance needed"
                 ),
                 Color(0xFF388E3C),
                 Color(0xFFE8F5E9)
             )
 
-            // ✅ UPDATED: Algae (still MODERATE risk)
             "Algae-Moderate" -> DamageRecommendation(
                 "Algae/Moss Growth",
-                "Algae or moss growing on the building means there's too much moisture. Not immediately dangerous, but can damage materials over time if you don't clean it and fix the water problem.",
+                "Algae or moss growing on the building means there's too much moisture. Not immediately dangerous, but can damage materials over time.",
                 "MODERATE",
                 listOf(
                     "Clean the area within 1-2 months using algae remover or cleaning solution",
-                    "Cleaning method: gently wash with garden hose and soft brush - DON'T use pressure washer on delicate surfaces",
-                    "Cleaning solutions you can use: bleach mixed with water (50/50) OR vinegar solution (2 gallons water + 2-3 cups white vinegar)",
-                    "Let the cleaning solution sit for 15-20 minutes, gently scrub, then rinse well",
+                    "Cleaning method: gently wash with garden hose and soft brush - DON'T use pressure washer",
                     "Find and fix why it's wet: improve drainage, fix gutters, repair any roof leaks",
                     "Cut back trees and bushes so more sunlight reaches the wall and air can flow",
-                    "Make sure ground slopes away from building so water runs off",
                     "You can apply special coating to prevent algae from growing back",
-                    "Check again in 6-12 months to make sure the moisture problem is fixed",
-                    "If algae keeps coming back, you may need to seal the surface with breathable, water-repellent coating"
+                    "Check again in 6-12 months to make sure the moisture problem is fixed"
                 ),
                 Color(0xFFF57C00),
                 Color(0xFFFFF3E0)
@@ -494,15 +391,12 @@ class AssessmentResultsActivity : ComponentActivity() {
 
             else -> DamageRecommendation(
                 "Clean Surface",
-                "No structural damage or surface deterioration detected. Building surface appears well-maintained and in good condition. Continue routine preventive maintenance to preserve structural integrity.",
+                "No structural damage or surface deterioration detected. Building surface appears well-maintained and in good condition.",
                 "GOOD",
                 listOf(
                     "Continue regular maintenance schedule (annual or bi-annual inspections)",
                     "Monitor during routine inspections for any emerging issues",
                     "Maintain proper drainage and moisture control measures",
-                    "Keep gutters and downspouts clear and functional",
-                    "Ensure vegetation is trimmed back from building surfaces",
-                    "Address any new cracks, stains, or deterioration promptly",
                     "No immediate action required - building surface in good condition"
                 ),
                 Color(0xFF2E7D32),
@@ -512,19 +406,10 @@ class AssessmentResultsActivity : ComponentActivity() {
     }
 }
 
-// Helper function to get confidence bar color based on severity level
-fun getConfidenceColor(damageLevel: String): Color {
-    return when (damageLevel) {
-        "High" -> Color(0xFFD32F2F) // Red
-        "Moderate" -> Color(0xFFF57C00) // Orange
-        else -> Color(0xFF2E7D32) // Green
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssessmentResultsScreen(
-    capturedImages: List<Uri>,
+    buildingAreas: List<BuildingArea>,
     assessmentName: String = "Unnamed Assessment",
     buildingType: String = "",
     constructionYear: String = "",
@@ -537,8 +422,7 @@ fun AssessmentResultsScreen(
     occupancy: String = "",
     environmentalRisks: List<String> = emptyList(),
     notes: String = "",
-    onSaveToFirebase: (AssessmentSummary) -> Boolean = { false },
-    onEditBuildingInfo: () -> Unit = {} // ✅ ADD: Callback for editing
+    onSaveToFirebase: (AssessmentSummary) -> Boolean = { false }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -547,24 +431,16 @@ fun AssessmentResultsScreen(
     var isSaving by remember { mutableStateOf(false) }
     var assessmentSummary by remember { mutableStateOf<AssessmentSummary?>(null) }
     var analysisError by remember { mutableStateOf<String?>(null) }
-    var showDownloadDialog by remember { mutableStateOf(false) }
     var isSavedToFirebase by remember { mutableStateOf(false) }
     var showReanalyzeDialog by remember { mutableStateOf(false) }
-
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var showImageViewer by remember { mutableStateOf(false) }
-
-    // ✅ NEW: Track re-analysis usage
     var hasReanalyzed by remember { mutableStateOf(false) }
 
     val SHOW_THRESHOLD = 0.50f
 
-    // ✅ SINGLE BackHandler - blocks during saving, navigates to Dashboard otherwise
     BackHandler(enabled = true) {
         if (isSaving) {
-            // Do nothing - block back button during saving
+            // Block back button during saving
         } else {
-            // Navigate to Dashboard when back is pressed
             val intent = Intent(context, DashboardActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
@@ -598,37 +474,29 @@ fun AssessmentResultsScreen(
             val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 224, 224, 3), DataType.FLOAT32)
             inputFeature0.loadBuffer(byteBuffer)
             val confidences = model.process(inputFeature0).outputFeature0AsTensorBuffer.floatArray
-            // ✅ ADD THIS DEBUG LOG
-            Log.d("ModelDebug", "Raw confidences: ${confidences.joinToString()}")
-            Log.d("ModelDebug", "Crack High: ${confidences[0]}, Crack Mod: ${confidences[1]}, Crack Low: ${confidences[2]}")
-            Log.d("ModelDebug", "Paint: ${confidences[3]}, Algae: ${confidences[4]}, Plain: ${confidences[5]}")
 
-
-            // ✅ FIXED: Correct mapping based on YOUR Teachable Machine class order
-            val crackHigh = confidences.getOrNull(0) ?: 0f      // Index 0: Crack High Risk
-            val crackMod = confidences.getOrNull(1) ?: 0f       // Index 1: Crack Moderate Risk
-            val crackLow = confidences.getOrNull(2) ?: 0f       // Index 2: Crack Low Risk
-            val paintConf = confidences.getOrNull(3) ?: 0f      // Index 3: Paint Risk Issue
-            val algaeConf = confidences.getOrNull(4) ?: 0f      // Index 4: Algae / Moss Issue
-            val plainConf = confidences.getOrNull(5) ?: 0f      // Index 5: Plain
+            val crackHigh = confidences.getOrNull(0) ?: 0f
+            val crackMod = confidences.getOrNull(1) ?: 0f
+            val crackLow = confidences.getOrNull(2) ?: 0f
+            val paintConf = confidences.getOrNull(3) ?: 0f
+            val algaeConf = confidences.getOrNull(4) ?: 0f
+            val plainConf = confidences.getOrNull(5) ?: 0f
 
             val maxIndex = confidences.indices.maxByOrNull { confidences[it] } ?: 0
             val maxConfidence = confidences.getOrNull(maxIndex) ?: 0f
 
-            // ✅ FIXED: Primary damage mapping matches your class order
             val (primaryDamageType, primaryDamageLevel) = when (maxIndex) {
-                0 -> "Spalling" to "High"              // Crack High Risk
-                1 -> "Major Crack" to "High"          // Crack Moderate Risk
-                2 -> "Minor Crack" to "Low"               // Crack Low Risk
-                3 -> "Paint Damage" to "Low"          // Paint Risk Issue
-                4 -> "Algae" to "Moderate"          // Algae / Moss Issue
-                5 -> "Plain" to "None"              // Plain
+                0 -> "Spalling" to "High"
+                1 -> "Major Crack" to "High"
+                2 -> "Minor Crack" to "Low"
+                3 -> "Paint Damage" to "Low"
+                4 -> "Algae" to "Moderate"
+                5 -> "Plain" to "None"
                 else -> "Plain" to "None"
             }
-            // ✅ FIXED: Detect all issues independently, don't let Plain block them
+
             val detectedIssuesMutable = mutableListOf<DetectedIssue>()
 
-            // Check ALL damage types independently (no Plain blocking)
             if (crackHigh > SHOW_THRESHOLD) {
                 detectedIssuesMutable.add(DetectedIssue("Spalling", "High", crackHigh))
             }
@@ -645,14 +513,13 @@ fun AssessmentResultsScreen(
                 detectedIssuesMutable.add(DetectedIssue("Algae", "Moderate", algaeConf))
             }
 
-            // ✅ Risk calculation based on what was actually detected
             val imageRisk = when {
                 detectedIssuesMutable.any { it.damageType == "Spalling" && it.damageLevel == "High" } -> "High"
                 detectedIssuesMutable.any { it.damageType == "Major Crack" && it.damageLevel == "High" } -> "High"
                 detectedIssuesMutable.any { it.damageType == "Algae" } -> "Moderate"
                 detectedIssuesMutable.any { it.damageType == "Minor Crack" || it.damageType == "Paint Damage" } -> "Low"
                 detectedIssuesMutable.isNotEmpty() -> "Low"
-                plainConf > SHOW_THRESHOLD -> "None"  // ✅ Only mark as "None" if truly plain AND no issues
+                plainConf > SHOW_THRESHOLD -> "None"
                 else -> "Low"
             }
 
@@ -660,18 +527,11 @@ fun AssessmentResultsScreen(
             originalBitmap.recycle()
             resizedBitmap.recycle()
 
-            // ✅ Return ImageAssessment with correct confidence values
             ImageAssessment(
                 imageUri = imageUri,
                 damageType = primaryDamageType,
                 damageLevel = primaryDamageLevel,
                 confidence = maxConfidence,
-                crackLowConf = crackLow,
-                crackModerateConf = crackMod,
-                crackHighConf = crackHigh,
-                paintConf = paintConf,
-                algaeConf = algaeConf,
-                plainConf = plainConf,
                 firebaseImageUrl = "",
                 detectedIssues = detectedIssuesMutable.toList(),
                 imageRisk = imageRisk
@@ -681,92 +541,89 @@ fun AssessmentResultsScreen(
             null
         }
     }
-    // ✅ MODIFIED: Only run once on initial load
+
     LaunchedEffect(Unit) {
-        if (capturedImages.isNotEmpty() && !isSavedToFirebase) {
-            // ✅ IMPORTANT: Set BOTH states to true at the very start
+        if (buildingAreas.isNotEmpty() && !isSavedToFirebase) {
             isAnalyzing = true
             isSaving = true
             analysisError = null
 
-            // ✅ Critical: Give UI time to render the dialog BEFORE any work
             yield()
-            delay(500)  // Increased to 500ms for slower devices
+            delay(500)
 
             try {
-                val imageAssessments = capturedImages.mapNotNull { analyzeImageWithTensorFlow(it) }
+                val areaAnalysesList = mutableListOf<AreaAnalysis>()
 
-                Log.d("AssessmentResults", "Analysis complete: ${imageAssessments.size} images")
+                buildingAreas.forEach { area ->
+                    val imageAssessments = area.photos.mapNotNull { analyzeImageWithTensorFlow(it) }
 
-                if (imageAssessments.isEmpty()) {
-                    analysisError = "Failed to analyze images. Please try again."
-                    isAnalyzing = false
-                    isSaving = false
-                } else {
-                    // ✅ UPDATED: Count by new damage type names
-                    var spallingCount = 0
-                    var majorCrackCount = 0
-                    var minorCrackCount = 0
-                    var paintDamageCount = 0
-                    var algaeCount = 0
-
-                    imageAssessments.forEach { ia ->
-                        ia.detectedIssues.forEach { issue ->
-                            when (issue.damageType) {
-                                "Spalling" -> spallingCount++
-                                "Major Crack" -> majorCrackCount++
-                                "Minor Crack" -> minorCrackCount++
-                                "Paint Damage" -> paintDamageCount++
-                                "Algae" -> algaeCount++
-                            }
-                        }
-                    }
-
-                    val overallRisk = when {
+                    val areaRisk = when {
                         imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
                         imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
                         imageAssessments.any { it.imageRisk == "Low" } -> "Low Risk"
                         else -> "Low Risk"
                     }
 
-                    // ✅ UPDATED: Simplified total issues calculation
-                    val totalIssues = spallingCount + majorCrackCount + minorCrackCount +
-                            paintDamageCount + algaeCount
-
-                    // ✅ UPDATED: Use simplified AssessmentSummary constructor
-                    val summary = AssessmentSummary(
-                        overallRisk,
-                        totalIssues,
-                        spallingCount,      // Maps to crackHighCount
-                        majorCrackCount,    // Maps to crackModerateCount
-                        minorCrackCount,    // Maps to crackLowCount
-                        paintDamageCount,   // Maps to paintCount
-                        algaeCount,         // Maps to algaeCount
-                        imageAssessments
+                    areaAnalysesList.add(
+                        AreaAnalysis(
+                            areaId = area.id,
+                            areaName = area.name,
+                            imageAssessments = imageAssessments,
+                            areaRisk = areaRisk
+                        )
                     )
+                }
 
-                    // ✅ FIX: Set isAnalyzing to false BEFORE Firebase save
-                    isAnalyzing = false
+                val damageTypeMap = mutableMapOf<String, MutableList<Float>>()
 
-                    Log.d("AssessmentResults", "Starting Firebase save...")
+                areaAnalysesList.forEach { areaAnalysis ->
+                    areaAnalysis.imageAssessments.forEach { imageAssessment ->
+                        imageAssessment.detectedIssues.forEach { issue ->
+                            damageTypeMap.getOrPut(issue.damageType) { mutableListOf() }.add(issue.confidence)
+                        }
+                    }
+                }
 
-                    // Now save to Firebase
-                    withContext(Dispatchers.IO) {
-                        val success = onSaveToFirebase(summary)
-                        withContext(Dispatchers.Main) {
-                            Log.d("AssessmentResults", "Firebase save result: $success")
-                            isSaving = false  // Only stop here
-                            if (success) {
-                                assessmentSummary = summary
-                                isSavedToFirebase = true
-                            } else {
-                                analysisError = "Failed to save assessment. Check your internet connection."
-                            }
+                val detectionSummary = damageTypeMap.map { (damageType, confidences) ->
+                    DetectionSummaryItem(
+                        damageType = damageType,
+                        count = confidences.size,
+                        avgConfidence = confidences.average().toFloat()
+                    )
+                }.sortedByDescending { it.count }
+
+                val overallRisk = when {
+                    areaAnalysesList.any { it.areaRisk == "High Risk" } -> "High Risk"
+                    areaAnalysesList.any { it.areaRisk == "Moderate Risk" } -> "Moderate Risk"
+                    areaAnalysesList.any { it.areaRisk == "Low Risk" } -> "Low Risk"
+                    else -> "Low Risk"
+                }
+
+                val totalIssues = detectionSummary.sumOf { it.count }
+
+                val summary = AssessmentSummary(
+                    overallRisk = overallRisk,
+                    totalIssues = totalIssues,
+                    detectionSummary = detectionSummary,
+                    areaAnalyses = areaAnalysesList
+                )
+
+                isAnalyzing = false
+
+                withContext(Dispatchers.IO) {
+                    val success = onSaveToFirebase(summary)
+                    withContext(Dispatchers.Main) {
+                        isSaving = false
+                        if (success) {
+                            assessmentSummary = summary
+                            isSavedToFirebase = true
+                        } else {
+                            analysisError = "Failed to save assessment. Check your connection."
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("AssessmentResults", "Error: ${e.message}", e)
+                Log.e("AssessmentResults", "Analysis failed", e)
                 analysisError = "Analysis failed: ${e.message}"
                 isAnalyzing = false
                 isSaving = false
@@ -774,975 +631,883 @@ fun AssessmentResultsScreen(
         }
     }
 
-    // Loading Dialog
     if (isAnalyzing || isSaving) {
         Dialog(
-            onDismissRequest = { /* Prevent dismissal */ },
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
+            onDismissRequest = { },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.padding(16.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
+                    modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(64.dp),
-                        color = Color(0xFF0288D1),
-                        strokeWidth = 5.dp
+                        modifier = Modifier.size(48.dp),
+                        color = Color(0xFF2196F3)
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Almost done! Saving your results...",
-                        fontSize = 18.sp,
+                        text = if (isAnalyzing) "Analyzing images..." else "Saving to database...",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.Black,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Please be patient, this may take a moment",
-                        fontSize = 14.sp,
-                        color = Color(0xFF6B7280),
-                        textAlign = TextAlign.Center
+                        color = Color.Black
                     )
                 }
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
-            TopAppBar(
-                title = {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = {
-                                if (!isSaving) {
-                                    val intent = Intent(context, DashboardActivity::class.java)
-                                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                                    context.startActivity(intent)
-                                    (context as? ComponentActivity)?.finish()
-                                }
-                            }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black) }
-                        }
-                        Text("Assessment Results", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0288D1))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+    if (analysisError != null && !isAnalyzing && !isSaving) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = analysisError ?: "An error occurred",
+                color = Color.Red,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                val intent = Intent(context, DashboardActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(intent)
+                (context as? ComponentActivity)?.finish()
+            }) {
+                Text("Back to Dashboard")
+            }
+        }
+        return
+    }
 
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(assessmentName, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
-                    Text(SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date()), fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
-                }
-
-                when {
-                    analysisError != null -> {
-                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))) {
-                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Error, contentDescription = "Error", tint = Color(0xFFD32F2F), modifier = Modifier.size(48.dp))
-                                Spacer(Modifier.height(8.dp))
-                                Text("Analysis Error", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD32F2F))
-                                Text(analysisError!!, fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
-                            }
-                        }
-                    }
-                    assessmentSummary != null -> {
-                        val summary = assessmentSummary!!
-                        val riskColor = when (summary.overallRisk) {
-                            "High Risk" -> Color(0xFFD32F2F)
-                            "Moderate Risk" -> Color(0xFFF57C00)
-                            else -> Color(0xFF388E3C)
-                        }
-
-                        Column(modifier = Modifier.fillMaxWidth().border(1.dp, riskColor, RoundedCornerShape(12.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(modifier = Modifier.background(riskColor, RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 8.dp)) {
-                                Text(summary.overallRisk, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = buildString {
-                                    append("Analysis of ${summary.assessments.size} images completed. ")
-                                    if (summary.totalIssues > 0) append("${summary.totalIssues} areas of concern detected.") else append("No significant issues detected.")
-                                },
-                                fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        // ✅ ALWAYS show Building Information section
-                        ExpandableSection(title = "Building Information", trailingContent = {
-                            IconButton(onClick = onEditBuildingInfo) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit",
-                                    tint = Color(0xFF6366F1), modifier = Modifier.size(20.dp))
-                            }
-                        }) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(2.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(20.dp)) {
-                                    val hasBuildingInfo = buildingType.isNotEmpty() || constructionYear.isNotEmpty() ||
-                                            renovationYear.isNotEmpty() || floors.isNotEmpty() || material.isNotEmpty() ||
-                                            foundation.isNotEmpty() || environment.isNotEmpty() || previousIssues.isNotEmpty() ||
-                                            occupancy.isNotEmpty() || environmentalRisks.isNotEmpty() || notes.isNotEmpty()
-
-                                    if (!hasBuildingInfo) {
-                                        // ✅ Show friendly message when no building info provided
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Info,
-                                                contentDescription = "No info",
-                                                tint = Color(0xFF9CA3AF),
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                            Spacer(Modifier.height(12.dp))
-                                            Text(
-                                                "No Building Information Available",
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color(0xFF374151),
-                                                textAlign = TextAlign.Center
-                                            )
-                                            Spacer(Modifier.height(8.dp))
-                                            Text(
-                                                "Tap the edit icon above to add details about your structure.",
-                                                fontSize = 14.sp,
-                                                color = Color(0xFF6B7280),
-                                                textAlign = TextAlign.Center,
-                                                lineHeight = 20.sp
-                                            )
-                                        }
-                                    } else {
-                                        // ✅ Show building info when available
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(24.dp)
-                                        ) {
-                                            if (buildingType.isNotEmpty()) {
-                                                Column(Modifier.weight(1f)) {
-                                                    Text("TYPE", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                                    Spacer(Modifier.height(6.dp))
-                                                    Text(buildingType, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                                }
-                                            }
-                                            if (floors.isNotEmpty()) {
-                                                Column(Modifier.weight(1f)) {
-                                                    Text("FLOORS", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                                    Spacer(Modifier.height(6.dp))
-                                                    Text(floors.replace(" Floor", "").replace(" Floors", ""), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                                }
-                                            }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(24.dp)
-                                        ) {
-                                            if (material.isNotEmpty()) {
-                                                Column(Modifier.weight(1f)) {
-                                                    Text("MATERIAL", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                                    Spacer(Modifier.height(6.dp))
-                                                    Text(material, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                                }
-                                            }
-                                            if (constructionYear.isNotEmpty()) {
-                                                Column(Modifier.weight(1f)) {
-                                                    Text("BUILT", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                                    Spacer(Modifier.height(6.dp))
-                                                    Text(constructionYear, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                                }
-                                            }
-                                        }
-
-                                        if (renovationYear.isNotEmpty()) BuildingInfoRow("Last Renovation", renovationYear.ifEmpty { "Never" })
-                                        if (foundation.isNotEmpty()) BuildingInfoRow("Foundation Type", foundation)
-                                        if (environment.isNotEmpty()) BuildingInfoRow("Environment", environment)
-                                        if (occupancy.isNotEmpty()) BuildingInfoRow("Occupancy Level", occupancy)
-                                        if (previousIssues.isNotEmpty()) BuildingInfoRow("Previous Issues", previousIssues.joinToString(", ").ifEmpty { "None" })
-                                        if (environmentalRisks.isNotEmpty()) BuildingInfoRow("Environmental Risk", environmentalRisks.firstOrNull() ?: "None")
-
-                                        if (notes.isNotEmpty()) {
-                                            HorizontalDivider(color = Color(0xFFE0E0E0), modifier = Modifier.padding(vertical = 12.dp))
-                                            Text("Additional Notes", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                            Spacer(Modifier.height(8.dp))
-                                            Text(notes, fontSize = 13.sp, color = Color.Black, lineHeight = 20.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    "Detection Summary",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(bottom = 12.dp)
-                                )
-
-                                var anyLine = false
-
-                                // ✅ UPDATED: Display new damage type names
-                                if (summary.crackHighCount > 0) {  // Spalling
-                                    SummaryRow("Spalling:", "${summary.crackHighCount} location(s) - High Risk")
-                                    anyLine = true
-                                }
-
-                                if (summary.crackModerateCount > 0) {  // Major Crack
-                                    SummaryRow("Major Crack:", "${summary.crackModerateCount} location(s) - High Risk")
-                                    anyLine = true
-                                }
-
-                                if (summary.crackLowCount > 0) {  // Minor Crack
-                                    SummaryRow("Minor Crack:", "${summary.crackLowCount} location(s) - Low Risk")
-                                    anyLine = true
-                                }
-
-                                if (summary.paintCount > 0) {  // Paint Damage
-                                    SummaryRow("Paint Damage:", "${summary.paintCount} location(s) - Low Risk")
-                                    anyLine = true
-                                }
-
-                                if (summary.algaeCount > 0) {  // Algae
-                                    SummaryRow("Algae/Moss:", "${summary.algaeCount} location(s) - Moderate Risk")
-                                    anyLine = true
-                                }
-
-                                if (!anyLine) {
-                                    SummaryRow("Overall:", "No visible damage detected")
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        ExpandableSection(title = "Recommendations", trailingContent = {
-                            Box(modifier = Modifier.background(Color(0xFF6366F1), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                                Text("${summary.totalIssues} Issues", fontSize = 12.sp, color = Color.White)
-                            }
-                        }) {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                // Color Legend
-                                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Confidence Level Legend:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
-                                        Spacer(Modifier.height(8.dp))
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(modifier = Modifier.size(16.dp).background(Color(0xFFD32F2F), RoundedCornerShape(2.dp)))
-                                                Spacer(Modifier.width(6.dp))
-                                                Text("High", fontSize = 12.sp, color = Color.Gray)
-                                            }
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(modifier = Modifier.size(16.dp).background(Color(0xFFF57C00), RoundedCornerShape(2.dp)))
-                                                Spacer(Modifier.width(6.dp))
-                                                Text("Moderate", fontSize = 12.sp, color = Color.Gray)
-                                            }
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(modifier = Modifier.size(16.dp).background(Color(0xFF2E7D32), RoundedCornerShape(2.dp)))
-                                                Spacer(Modifier.width(6.dp))
-                                                Text("Low", fontSize = 12.sp, color = Color.Gray)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Spacer(Modifier.height(4.dp))
-
-                                // ✅ NEW: Group identical issues and merge them
-                                val allIssues = summary.assessments.flatMap { it.detectedIssues }
-
-                                if (allIssues.isEmpty()) {
-                                    Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                                        elevation = CardDefaults.cardElevation(0.dp)) {
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                Text(text = "No Significant Issues", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                                Box(modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                                    Text(text = "GOOD", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF388E3C))
-                                                }
-                                            }
-                                            Spacer(Modifier.height(8.dp))
-                                            Text("This area appears to be in good condition.", fontSize = 13.sp, color = Color.Gray)
-                                        }
-                                    }
-                                } else {
-                                    // Group by "DamageType-DamageLevel" key
-                                    val groupedIssues = allIssues.groupBy { "${it.damageType}-${it.damageLevel}" }
-
-                                    groupedIssues.forEach { (key, issuesList) ->
-                                        val firstIssue = issuesList.first()
-                                        val averageConfidence = issuesList.map { it.confidence }.average().toFloat()
-                                        val locationCount = issuesList.size
-
-                                        val rec = (context as AssessmentResultsActivity).getRecommendation(
-                                            firstIssue.damageType,
-                                            firstIssue.damageLevel
-                                        )
-
-                                        MergedRecommendationCard(
-                                            recommendation = rec,
-                                            averageConfidence = averageConfidence,
-                                            locationCount = locationCount,
-                                            damageLevel = firstIssue.damageLevel
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        ExpandableSection(title = "AI Analysis Results", trailingContent = {
-                            Box(modifier = Modifier.background(Color(0xFF6366F1), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                                Text("${summary.assessments.size} Images", fontSize = 12.sp, color = Color.White)
-                            }
-                        }) {
-                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                summary.assessments.forEachIndexed { index, assessment ->
-                                    AnalyzedImageCardV2(imageNumber = index + 1, assessment = assessment, onImageClick = {
-                                        selectedImageUri = assessment.imageUri
-                                        showImageViewer = true
-                                    })
-                                    if (index < summary.assessments.size - 1) HorizontalDivider(color = Color(0xFFE0E0E0))
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    if (!hasReanalyzed) {
-                                        showReanalyzeDialog = true
-                                    }
-                                },
-                                enabled = !hasReanalyzed, // ✅ disables after 1 use
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (!hasReanalyzed) Color.White else Color(0xFFF0F0F0),
-                                    contentColor = Color(0xFF0288D1),
-                                    disabledContainerColor = Color(0xFFE0E0E0),
-                                    disabledContentColor = Color.Gray
-                                )
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Re-analyze", modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = if (hasReanalyzed) "Used" else "Re-analyze",
-                                    fontSize = 14.sp,
-                                    color = if (hasReanalyzed) Color.Gray else Color(0xFF0288D1)
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = { showDownloadDialog = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color(0xFF0288D1)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("Download", fontSize = 14.sp, color = Color (0xFF0288D1))
-                            }
-                        }
-
-                        // ✅ Re-analyze confirmation dialog
-                        if (showReanalyzeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showReanalyzeDialog = false },
-                                icon = {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF0288D1), modifier = Modifier.size(48.dp))
-                                },
-                                title = {
-                                    Text("Re-analyze Images?", fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                                },
-                                text = {
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text("This will:", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("• Re-run AI analysis on all ${summary.assessments.size} images", fontSize = 13.sp, color = Color(0xFF6B7280))
-                                        Text("• Generate new detection results", fontSize = 13.sp, color = Color(0xFF6B7280))
-                                        Text("• Update the saved assessment", fontSize = 13.sp, color = Color(0xFF6B7280))
-                                        Text("• Keep assessment name and building info", fontSize = 13.sp, color = Color(0xFF6B7280))
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text("Previous results will be overwritten.", fontSize = 13.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Medium)
-                                    }
-                                },
-                                confirmButton = {
-                                    Button(
-                                        onClick = {
-                                            hasReanalyzed = true // ✅ Mark as used FIRST
-                                            showReanalyzeDialog = false
-                                            coroutineScope.launch {
-                                                isAnalyzing = true
-                                                val imageAssessments = capturedImages.mapNotNull { analyzeImageWithTensorFlow(it) }
-                                                if (imageAssessments.isEmpty()) {
-                                                    isAnalyzing = false
-                                                    analysisError = "Failed to re-analyze images"
-                                                } else {
-                                                    // ✅ UPDATED: Count with new names
-                                                    var spallingCount = 0
-                                                    var majorCrackCount = 0
-                                                    var minorCrackCount = 0
-                                                    var paintDamageCount = 0
-                                                    var algaeCount = 0
-
-                                                    imageAssessments.forEach { ia ->
-                                                        ia.detectedIssues.forEach { issue ->
-                                                            when (issue.damageType) {
-                                                                "Serious Concrete Damage" -> spallingCount++
-                                                                "Large Crack" -> majorCrackCount++
-                                                                "Hairline Crack" -> minorCrackCount++
-                                                                "Paint Peeling" -> paintDamageCount++
-                                                                "Algae/Moss Growth" -> algaeCount++
-                                                            }
-                                                        }
-                                                    }
-
-                                                    val newRisk = when {
-                                                        imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
-                                                        imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
-                                                        else -> "Low Risk"
-                                                    }
-
-                                                    val totalIssues = spallingCount + majorCrackCount + minorCrackCount +
-                                                            paintDamageCount + algaeCount
-
-                                                    // ✅ UPDATED: Use new constructor
-                                                    val newSummary = AssessmentSummary(
-                                                        newRisk,
-                                                        totalIssues,
-                                                        spallingCount,
-                                                        majorCrackCount,
-                                                        minorCrackCount,
-                                                        paintDamageCount,
-                                                        algaeCount,
-                                                        imageAssessments
-                                                    )
-
-                                                    isAnalyzing = false
-                                                    isSaving = true
-                                                    val success = withContext(Dispatchers.IO) {
-                                                        (context as AssessmentResultsActivity).saveAssessmentToFirebase(
-                                                            assessmentName, newSummary, buildingType, constructionYear,
-                                                            renovationYear, floors, material, foundation, environment,
-                                                            previousIssues, occupancy, environmentalRisks, notes,
-                                                            isReanalysis = true
-                                                        )
-                                                    }
-                                                    isSaving = false
-                                                    if (success) {
-                                                        assessmentSummary = newSummary
-                                                        Toast.makeText(context, "Re-analysis complete! Results updated.", Toast.LENGTH_LONG).show()
-                                                    } else {
-                                                        analysisError = "Failed to save re-analyzed results"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Re-analyze Now")
-                                    }
-                                },
-                                dismissButton = {
-                                    OutlinedButton(
-                                        onClick = { showReanalyzeDialog = false },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray),
-                                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                                    ) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            )
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Button(onClick = {
+    assessmentSummary?.let { summary ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF5F5F5))
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                ) {
+                    IconButton(
+                        onClick = {
                             val intent = Intent(context, DashboardActivity::class.java)
                             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
                             context.startActivity(intent)
                             (context as? ComponentActivity)?.finish()
-                        }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1))) {
-                            Icon(Icons.Default.Home, contentDescription = "Dashboard", modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Back to Dashboard", fontSize = 14.sp)
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black
+                        )
+                    }
+                    Text(
+                        text = "Assessment Details",
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0288D1)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = assessmentName,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date()),
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (summary.overallRisk) {
+                            "High Risk" -> Color(0xFFFFEBEE)
+                            "Moderate Risk" -> Color(0xFFFFF3E0)
+                            else -> Color(0xFFE8F5E9)
+                        }
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        2.dp,
+                        when (summary.overallRisk) {
+                            "High Risk" -> Color(0xFFD32F2F)
+                            "Moderate Risk" -> Color(0xFFF57C00)
+                            else -> Color(0xFF388E3C)
+                        }
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = when (summary.overallRisk) {
+                                "High Risk" -> Color(0xFFD32F2F)
+                                "Moderate Risk" -> Color(0xFFF57C00)
+                                else -> Color(0xFF388E3C)
+                            },
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Text(
+                                text = summary.overallRisk,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Based on analysis of ${summary.areaAnalyses.sumOf { it.imageAssessments.size }} photos across ${summary.areaAnalyses.size} areas",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ALWAYS show Building Information section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        val hasBuildingInfo = buildingType.isNotEmpty() || constructionYear.isNotEmpty() ||
+                                renovationYear.isNotEmpty() || floors.isNotEmpty() || material.isNotEmpty() ||
+                                foundation.isNotEmpty() || environment.isNotEmpty() || previousIssues.isNotEmpty() ||
+                                occupancy.isNotEmpty() || environmentalRisks.isNotEmpty() || notes.isNotEmpty()
+
+                        if (!hasBuildingInfo) {
+                            // Show friendly message when no building info provided
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = "No info",
+                                    tint = Color(0xFF9CA3AF),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    "No Building Information Available",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF374151),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Tap the edit icon above to add details about your structure.",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF6B7280),
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        } else {
+                            // Show building info when available
+                            if (buildingType.isNotEmpty() || floors.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                                ) {
+                                    if (buildingType.isNotEmpty()) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("TYPE", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(buildingType, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    if (floors.isNotEmpty()) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("FLOORS", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(floors, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (material.isNotEmpty() || constructionYear.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                                ) {
+                                    if (material.isNotEmpty()) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("MATERIAL", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(material, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    if (constructionYear.isNotEmpty()) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("BUILT", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(constructionYear, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (renovationYear.isNotEmpty()) {
+                                BuildingInfoRow("Last Renovation", renovationYear.ifEmpty { "Never" })
+                            }
+                            if (foundation.isNotEmpty()) {
+                                BuildingInfoRow("Foundation Type", foundation)
+                            }
+                            if (environment.isNotEmpty()) {
+                                BuildingInfoRow("Environment", environment)
+                            }
+                            if (occupancy.isNotEmpty()) {
+                                BuildingInfoRow("Occupancy Level", occupancy)
+                            }
+                            if (previousIssues.isNotEmpty()) {
+                                BuildingInfoRow("Previous Issues", previousIssues.joinToString(", ").ifEmpty { "None" })
+                            }
+                            if (environmentalRisks.isNotEmpty()) {
+                                BuildingInfoRow("Environmental Risk", environmentalRisks.firstOrNull() ?: "None")
+                            }
+                            if (notes.isNotEmpty()) {
+                                HorizontalDivider(color = Color(0xFFE0E0E0), modifier = Modifier.padding(vertical = 12.dp))
+                                Text("Additional Notes", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(notes, fontSize = 13.sp, color = Color.Black, lineHeight = 20.sp)
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.height(24.dp))
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFF57C00),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Detection Summary",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (summary.detectionSummary.isEmpty()) {
+                            Text(
+                                text = "No visible damage detected",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        } else {
+                            summary.detectionSummary.forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.damageType,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.Black
+                                        )
+                                        Text(
+                                            text = "Avg Confidence: ${(item.avgConfidence * 100).toInt()}%",
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF2196F3),
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "${item.count}",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "Area-by-Area Analysis",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                summary.areaAnalyses.forEach { areaAnalysis ->
+                    var areaExpanded by remember { mutableStateOf(true) }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { areaExpanded = !areaExpanded },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Place,
+                                        contentDescription = null,
+                                        tint = Color(0xFF2196F3),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = areaAnalysis.areaName,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = when (areaAnalysis.areaRisk) {
+                                            "High Risk" -> Color(0xFFFFEBEE)
+                                            "Moderate Risk" -> Color(0xFFFFF3E0)
+                                            else -> Color(0xFFE8F5E9)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = areaAnalysis.areaRisk,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when (areaAnalysis.areaRisk) {
+                                                "High Risk" -> Color(0xFFD32F2F)
+                                                "Moderate Risk" -> Color(0xFFF57C00)
+                                                else -> Color(0xFF388E3C)
+                                            },
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    val rotation by animateFloatAsState(if (areaExpanded) 180f else 0f)
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.rotate(rotation)
+                                    )
+                                }
+                            }
+
+                            AnimatedVisibility(visible = areaExpanded) {
+                                Column(modifier = Modifier.padding(top = 16.dp)) {
+                                    Text(
+                                        text = "Image Analysis",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.Gray
+                                    )
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    areaAnalysis.imageAssessments.forEachIndexed { index, imageAssessment ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9))
+                                        ) {
+                                            Row(modifier = Modifier.padding(12.dp)) {
+                                                Image(
+                                                    painter = rememberAsyncImagePainter(imageAssessment.imageUri),
+                                                    contentDescription = "Image ${index + 1}",
+                                                    modifier = Modifier
+                                                        .size(80.dp)
+                                                        .background(Color.Gray, RoundedCornerShape(8.dp)),
+                                                    contentScale = ContentScale.Crop
+                                                )
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Image ${index + 1}",
+                                                            fontSize = 16.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.Black
+                                                        )
+                                                        Surface(
+                                                            shape = RoundedCornerShape(8.dp),
+                                                            color = when (imageAssessment.imageRisk) {
+                                                                "High" -> Color(0xFFFFEBEE)
+                                                                "Moderate" -> Color(0xFFFFF3E0)
+                                                                "Low" -> Color(0xFFE8F5E9)
+                                                                else -> Color(0xFFE0E0E0)
+                                                            }
+                                                        ) {
+                                                            Text(
+                                                                text = when (imageAssessment.imageRisk) {
+                                                                    "High" -> "HIGH"
+                                                                    "Moderate" -> "MODERATE"
+                                                                    "Low" -> "LOW"
+                                                                    else -> "PLAIN"
+                                                                },
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = when (imageAssessment.imageRisk) {
+                                                                    "High" -> Color(0xFFD32F2F)
+                                                                    "Moderate" -> Color(0xFFF57C00)
+                                                                    "Low" -> Color(0xFF388E3C)
+                                                                    else -> Color.Gray
+                                                                },
+                                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                                    if (imageAssessment.detectedIssues.isEmpty()) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.CheckCircle,
+                                                                contentDescription = null,
+                                                                tint = Color(0xFF388E3C),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(
+                                                                text = "Clean surface - No damage detected",
+                                                                fontSize = 12.sp,
+                                                                color = Color(0xFF388E3C)
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "Confidence: ${(imageAssessment.confidence * 100).toInt()}%",
+                                                            fontSize = 12.sp,
+                                                            color = Color.Gray
+                                                        )
+                                                    } else {
+                                                        imageAssessment.detectedIssues.forEach { issue ->
+                                                            Text(
+                                                                text = "${issue.damageType}",
+                                                                fontSize = 14.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = Color.Black
+                                                            )
+                                                            Text(
+                                                                text = "Confidence: ${(issue.confidence * 100).toInt()}%",
+                                                                fontSize = 12.sp,
+                                                                color = Color.Gray
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Recommended Actions",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.Gray
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val uniqueIssues = areaAnalysis.imageAssessments
+                                        .flatMap { it.detectedIssues }
+                                        .groupBy { "${it.damageType}-${it.damageLevel}" }
+
+                                    if (uniqueIssues.isEmpty()) {
+                                        val rec = (context as AssessmentResultsActivity).getRecommendation("Plain", "None")
+                                        RecommendationCard(rec, 0, 0f)  // Changed second parameter from 0 to 0f (Float)
+                                    } else {
+                                        uniqueIssues.forEach { (_, issuesList) ->
+                                            val firstIssue = issuesList.first()
+                                            val avgConfidence = issuesList.map { it.confidence }.average().toFloat()
+                                            val locationCount = issuesList.size
+                                            val rec = (context as AssessmentResultsActivity).getRecommendation(firstIssue.damageType, firstIssue.damageLevel)
+                                            RecommendationCard(rec, locationCount, avgConfidence)
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        Toast.makeText(context, "Download feature coming soon", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Download Full Report (PDF)", color = Color.White, fontSize = 16.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        if (!hasReanalyzed) {
+                            showReanalyzeDialog = true
+                        }
+                    },
+                    enabled = !hasReanalyzed,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = if (hasReanalyzed) Color.Gray else Color(0xFF2196F3)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (hasReanalyzed) "Re-analysis Used" else "Re-analyze",
+                        color = if (hasReanalyzed) Color.Gray else Color(0xFF2196F3),
+                        fontSize = 16.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(context, DashboardActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                        (context as? ComponentActivity)?.finish()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Back to History", color = Color(0xFF2196F3), fontSize = 16.sp)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
 
-        if (showImageViewer && selectedImageUri != null) {
-            FullScreenImageViewer(imageUri = selectedImageUri!!, onDismiss = { showImageViewer = false; selectedImageUri = null })
-        }
+        if (showReanalyzeDialog) {
+            AlertDialog(
+                onDismissRequest = { showReanalyzeDialog = false },
+                title = {
+                    Text(
+                        "Re-analyze Images?",
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                },
+                text = {
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text("This will:", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("• Re-run AI analysis on all ${summary.areaAnalyses.sumOf { it.imageAssessments.size }} images", fontSize = 13.sp)
+                        Text("• Generate new detection results", fontSize = 13.sp)
+                        Text("• Update the saved assessment", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Previous results will be overwritten.", fontSize = 13.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Medium)
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            hasReanalyzed = true
+                            showReanalyzeDialog = false
+                            coroutineScope.launch {
+                                isAnalyzing = true
 
-        if (showDownloadDialog) {
-            DownloadDialog(onDismiss = { showDownloadDialog = false }, onDownload = {
-                coroutineScope.launch {
-                    try {
-                        val localImageUris = assessmentSummary?.assessments?.map { it.imageUri.toString() }.orEmpty()
-                        val pdfData = PdfAssessmentData(
-                            assessmentName = assessmentName,
-                            date = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date()),
-                            overallRisk = assessmentSummary?.overallRisk ?: "Unknown",
-                            totalIssues = assessmentSummary?.totalIssues ?: 0,
-                            crackHighCount = assessmentSummary?.crackHighCount ?: 0,
-                            crackModerateCount = assessmentSummary?.crackModerateCount ?: 0,
-                            crackLowCount = assessmentSummary?.crackLowCount ?: 0,
-                            paintCount = assessmentSummary?.paintCount ?: 0,  // ✅ Single merged count
-                            algaeCount = assessmentSummary?.algaeCount ?: 0,  // ✅ Single merged count
-                            buildingType = buildingType,
-                            constructionYear = constructionYear,
-                            renovationYear = renovationYear,
-                            floors = floors,
-                            material = material,
-                            foundation = foundation,
-                            environment = environment,
-                            previousIssues = previousIssues.joinToString(", "),
-                            occupancy = occupancy,
-                            environmentalRisks = environmentalRisks.joinToString(", "),
-                            notes = notes,
-                            imageUrls = localImageUris
-                        )
-                        val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
-                        if (pdfPath != null) {
-                            Toast.makeText(context, "PDF saved to Downloads folder!", Toast.LENGTH_LONG).show()
-                            showDownloadDialog = false
-                        } else {
-                            Toast.makeText(context, "Failed to generate PDF", Toast.LENGTH_SHORT).show()
-                            showDownloadDialog = false
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        showDownloadDialog = false
+                                val areaAnalysesList = mutableListOf<AreaAnalysis>()
+
+                                buildingAreas.forEach { area ->
+                                    val imageAssessments = area.photos.mapNotNull { analyzeImageWithTensorFlow(it) }
+
+                                    val areaRisk = when {
+                                        imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
+                                        imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
+                                        imageAssessments.any { it.imageRisk == "Low" } -> "Low Risk"
+                                        else -> "Low Risk"
+                                    }
+
+                                    areaAnalysesList.add(
+                                        AreaAnalysis(
+                                            areaId = area.id,
+                                            areaName = area.name,
+                                            imageAssessments = imageAssessments,
+                                            areaRisk = areaRisk
+                                        )
+                                    )
+                                }
+
+                                val damageTypeMap = mutableMapOf<String, MutableList<Float>>()
+
+                                areaAnalysesList.forEach { areaAnalysis ->
+                                    areaAnalysis.imageAssessments.forEach { imageAssessment ->
+                                        imageAssessment.detectedIssues.forEach { issue ->
+                                            damageTypeMap.getOrPut(issue.damageType) { mutableListOf() }.add(issue.confidence)
+                                        }
+                                    }
+                                }
+
+                                val detectionSummary = damageTypeMap.map { (damageType, confidences) ->
+                                    DetectionSummaryItem(
+                                        damageType = damageType,
+                                        count = confidences.size,
+                                        avgConfidence = confidences.average().toFloat()
+                                    )
+                                }.sortedByDescending { it.count }
+
+                                val newRisk = when {
+                                    areaAnalysesList.any { it.areaRisk == "High Risk" } -> "High Risk"
+                                    areaAnalysesList.any { it.areaRisk == "Moderate Risk" } -> "Moderate Risk"
+                                    else -> "Low Risk"
+                                }
+
+                                val totalIssues = detectionSummary.sumOf { it.count }
+
+                                val newSummary = AssessmentSummary(
+                                    overallRisk = newRisk,
+                                    totalIssues = totalIssues,
+                                    detectionSummary = detectionSummary,
+                                    areaAnalyses = areaAnalysesList
+                                )
+
+                                isAnalyzing = false
+                                isSaving = true
+
+                                val success = withContext(Dispatchers.IO) {
+                                    (context as AssessmentResultsActivity).saveAssessmentToFirebase(
+                                        assessmentName, newSummary, buildingType, constructionYear,
+                                        renovationYear, floors, material, foundation, environment,
+                                        previousIssues, occupancy, environmentalRisks, notes,
+                                        isReanalysis = true
+                                    )
+                                }
+
+                                isSaving = false
+
+                                if (success) {
+                                    assessmentSummary = newSummary
+                                    Toast.makeText(context, "✓ Re-analysis complete! Results updated.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    analysisError = "Failed to save re-analyzed results"
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1))
+                    ) {
+                        Text("Re-analyze Now")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = { showReanalyzeDialog = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancel")
                     }
                 }
-            })
+            )
         }
-    }
-}
-
-@Composable
-private fun SummaryRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Text(value, fontSize = 14.sp, color = Color.Gray)
     }
 }
 
 @Composable
 fun BuildingInfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black, textAlign = TextAlign.End, modifier = Modifier.weight(1.5f))
-    }
-}
-
-@Composable
-fun FullScreenImageViewer(imageUri: Uri, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black).clickable { onDismiss() }) {
-            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-                Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp))
-            }
-            Image(painter = rememberAsyncImagePainter(imageUri), contentDescription = "Full screen image", modifier = Modifier.fillMaxSize().clickable { onDismiss() }, contentScale = ContentScale.Fit)
-        }
-    }
-}
-@Composable
-fun AnalyzedImageCardV2(imageNumber: Int, assessment: ImageAssessment, onImageClick: () -> Unit = {}) {
-    val issues = assessment.detectedIssues
-
-    // ✅ MODIFIED: Check for Plain surfaces first, then determine level
-    val imageOverallLevel = remember(issues, assessment.plainConf) {
-        when {
-            assessment.plainConf > 0.30f -> "Plain"
-            issues.any { it.damageLevel == "High" } -> "High"
-            issues.any { it.damageLevel == "Moderate" } -> "Moderate"
-            issues.any { it.damageType == "Paint" || it.damageType == "Algae" } -> "Moderate"  // ← ADD THIS
-            issues.any { it.damageLevel == "Low" } -> "Low"
-            else -> "Low"
-        }
-    }
-
-
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(modifier = Modifier.size(80.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp)).clickable { onImageClick() }) {
-            Image(painter = rememberAsyncImagePainter(assessment.imageUri), contentDescription = "Analyzed image $imageNumber", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Image $imageNumber", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                LevelPill(level = imageOverallLevel)
-            }
-            Spacer(Modifier.height(6.dp))
-
-            // ✅ MODIFIED: Show different messages based on Plain confidence
-            when {
-                assessment.plainConf > 0.30f -> {
-                    // ✅ NEW: Show clean surface message for Plain images
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Clean",
-                            tint = Color(0xFF2E7D32),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Clean surface - No damage detected",
-                            fontSize = 12.sp,
-                            color = Color(0xFF2E7D32),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    // ✅ Show plain confidence bar
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Text("Clean Surface", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                        Spacer(Modifier.height(6.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            LinearProgressIndicator(
-                                progress = { assessment.plainConf.coerceIn(0f, 1f) },
-                                modifier = Modifier.weight(1f).height(8.dp),
-                                color = Color(0xFF2E7D32),  // Green for plain
-                                trackColor = Color(0xFFE0E0E0)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("${(assessment.plainConf * 100).toInt()}%", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                        }
-                    }
-                }
-                issues.isEmpty() -> {
-                    Text("No clear detection - Review image quality", fontSize = 12.sp, color = Color.Gray)
-                }
-                else -> {
-                    // ✅ Show damage issues (existing logic)
-                    issues.sortedByDescending { it.confidence }.forEach { issue ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text(issue.damageType, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                            Spacer(Modifier.height(6.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                LinearProgressIndicator(
-                                    progress = { issue.confidence.coerceIn(0f, 1f) },
-                                    modifier = Modifier.weight(1f).height(8.dp),
-                                    color = getConfidenceColor(issue.damageLevel),
-                                    trackColor = Color(0xFFE0E0E0)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text("${(issue.confidence * 100).toInt()}%", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun LevelPill(level: String) {
-    val colors = when (level) {
-        "High" -> Pair(Color(0xFFFFEBEE), Color(0xFFD32F2F))
-        "Moderate" -> Pair(Color(0xFFFFF3E0), Color(0xFFF57C00))
-        "Plain" -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))  // ✅ NEW: Green for plain
-        else -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
-    }
-    Box(modifier = Modifier.background(colors.first, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-        Text(level.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = colors.second)
-    }
-}
-
-@Composable
-fun DownloadDialog(onDismiss: () -> Unit, onDownload: () -> Unit) {
-    var isGenerating by remember { mutableStateOf(false) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Download Assessment", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(20.dp)) }
-                }
-                Spacer(Modifier.height(24.dp))
-                if (isGenerating) {
-                    CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFF0288D1))
-                    Spacer(Modifier.height(16.dp))
-                    Text("Generating PDF...", fontSize = 14.sp, color = Color.Gray)
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)).clickable {
-                        isGenerating = true
-                        onDownload()
-                    }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(48.dp).background(Color(0xFFFF5252), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.PictureAsPdf, contentDescription = "PDF", tint = Color.White, modifier = Modifier.size(24.dp))
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Assessment Report (PDF)", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                            Text("Download detailed analysis results", fontSize = 14.sp, color = Color.Gray)
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray), border = BorderStroke(1.dp, Color(0xFFE0E0E0))) {
-                        Text("Cancel", fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ExpandableSection(title: String, trailingContent: @Composable (() -> Unit)? = null, content: @Composable () -> Unit) {
-    var expanded by remember { mutableStateOf(true) }
-    val rotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "rotation")
-
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp)) {
-        Column {
-            Row(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (trailingContent != null) trailingContent()
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = if (expanded) "Collapse" else "Expand",
-                        modifier = Modifier.rotate(rotation).size(24.dp))
-                }
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) { content() }
-            }
-        }
-    }
-}
-
-@Composable
-fun MergedRecommendationCard(
-    recommendation: DamageRecommendation,
-    averageConfidence: Float,
-    locationCount: Int,
-    damageLevel: String
-) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(0.dp)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    recommendation.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                Box(
-                    modifier = Modifier
-                        .background(recommendation.severityBgColor, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        recommendation.severity,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = recommendation.severityColor
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            Text(recommendation.description, fontSize = 13.sp, color = Color.Gray, lineHeight = 18.sp)
-
-            Spacer(Modifier.height(16.dp))
-
-            // AI Confidence Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("AI Confidence", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = { averageConfidence },
-                        modifier = Modifier.width(100.dp).height(6.dp),
-                        color = getConfidenceColor(damageLevel),
-                        trackColor = Color(0xFFE0E0E0)
-                    )
-                    Text(
-                        text = "${(averageConfidence * 100).toInt()}%",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Gray,
-                        modifier = Modifier.widthIn(min = 40.dp)
-                    )
-                }
-            }
-
-            // ✅ IMPROVED: Add divider and better spacing before actions
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFFE5E7EB), thickness = 1.dp)
-            Spacer(Modifier.height(16.dp))
-
-            // ✅ IMPROVED: Better formatted actions section
-            Text(
-                "Recommended Actions",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F2937)
-            )
-            Spacer(Modifier.height(12.dp))
-
-            // ✅ IMPROVED: Each action in a card with better spacing
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                recommendation.actions.forEachIndexed { index, action ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFF9FAFB)
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            // ✅ IMPROVED: Numbered circles instead of just checks
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .background(
-                                        Color(0xFF10B981),
-                                        RoundedCornerShape(12.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "${index + 1}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                action,
-                                fontSize = 13.sp,
-                                color = Color(0xFF374151),
-                                lineHeight = 20.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ✅ Location counter (only show if > 1)
-            if (locationCount > 1) {
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = Color(0xFFE5E7EB))
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color(0xFF6366F1),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Detected Locations",
-                            fontSize = 13.sp,
-                            color = Color(0xFF374151),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .background(Color(0xFFEEF2FF), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            "$locationCount images",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF6366F1)
-                        )
-                    }
-                }
-            }
-        }
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = Color.Gray
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
     }
 }
 
-@Preview(showBackground = true, widthDp = 390, heightDp = 2000)
 @Composable
-fun AssessmentResultsPreview() {
-    MaterialTheme {
-        AssessmentResultsScreen(capturedImages = emptyList())
+fun RecommendationCard(recommendation: DamageRecommendation, locationCount: Int, avgConfidence: Float) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = recommendation.severityBgColor)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = recommendation.title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = recommendation.severityColor
+                ) {
+                    Text(
+                        text = recommendation.severity,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            if (locationCount > 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "$locationCount image${if (locationCount > 1) "s" else ""} detected • AI Confidence: ${(avgConfidence * 100).toInt()}%",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = recommendation.description,
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            recommendation.actions.forEachIndexed { index, action ->
+                Row(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = recommendation.severityColor,
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "${index + 1}",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = action,
+                        fontSize = 12.sp,
+                        color = Color.Black,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
     }
 }

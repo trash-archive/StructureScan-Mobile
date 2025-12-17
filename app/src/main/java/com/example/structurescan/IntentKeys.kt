@@ -7,6 +7,7 @@ object IntentKeys {
     const val CAPTURED_IMAGES = "captured_images"
     const val UPDATED_IMAGES = "updated_images" // ✅ Add this new key
 
+    const val BUILDING_AREAS = "building_areas"
 
 
     // Building Information (new)

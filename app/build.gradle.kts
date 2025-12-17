@@ -5,6 +5,8 @@ plugins {
 
     // ✅ Apply Google Services plugin so Firebase can initialize with google-services.json
     id("com.google.gms.google-services")
+
+    id("kotlin-parcelize") // Add this line
 }
 
 android {
@@ -102,6 +104,7 @@ dependencies {
     implementation(libs.tensorflow.lite.support)
     implementation(libs.tensorflow.lite.metadata)
     implementation(libs.tensorflow.lite.gpu)
+    implementation(libs.androidx.material3)
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // CameraX (for scanning feature)

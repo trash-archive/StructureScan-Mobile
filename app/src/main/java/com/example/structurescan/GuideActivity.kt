@@ -24,12 +24,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -48,7 +46,7 @@ class GuideActivity : ComponentActivity() {
                         startActivity(intent)
                     },
                     onScanNow = {
-                        val intent = Intent(this, CaptureImagesActivity::class.java)
+                        val intent = Intent(this, BuildingAreaActivity::class.java)
                         intent.putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
                         startActivity(intent)
                     }

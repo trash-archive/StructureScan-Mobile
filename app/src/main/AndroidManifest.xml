@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
-    <!-- Declare camera feature -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" /> <!-- Declare camera feature -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -22,133 +21,112 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:screenOrientation="portrait"
         android:supportsRtl="true"
-        android:theme="@style/Theme.StructureScan"
-        android:screenOrientation="portrait">
-
+        android:theme="@style/Theme.StructureScan">
+        <activity
+            android:name=".BuildingAreaActivity"
+            android:exported="false" />
         <!-- Assessment Activities -->
         <activity
             android:name=".AssessmentDetailsActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".AssessmentResultsActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-        <activity
-            android:name=".AnalyzedImageActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-        <activity
-            android:name=".AnalysisLoadingActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- History and Building Info -->
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".HistoryActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".EditBuildingInfoActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".BuildingInfoActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- Profile Activities -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- Profile Activities -->
         <activity
             android:name=".ProfileActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".EditProfileActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".ProfileChangePassword"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- Authentication Activities -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- Authentication Activities -->
         <activity
             android:name=".LoginActivity"
-            android:screenOrientation="portrait"
             android:exported="false"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.StructureScan" />
         <activity
             android:name=".RegisterActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".ChangePasswordActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".EmailForgotPassword"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".EnterCodeActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- Main Launcher Activity -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- Main Launcher Activity -->
         <activity
             android:name=".LoadingActivity"
-            android:screenOrientation="portrait"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <!-- Dashboard and Scan Activities -->
+        </activity> <!-- Dashboard and Scan Activities -->
         <activity
             android:name=".DashboardActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".ScanActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".GuideActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".CaptureImagesActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".SavedPhotoActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- Onboarding Activities -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- Onboarding Activities -->
         <activity
             android:name=".Onboarding1Activity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".Onboarding2Activity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".Onboarding3Activity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- Other Activities -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- Other Activities -->
         <activity
             android:name=".DetailActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
-
-        <!-- FileProvider for camera and PDF sharing -->
+            android:exported="false"
+            android:screenOrientation="portrait" /> <!-- FileProvider for camera and PDF sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

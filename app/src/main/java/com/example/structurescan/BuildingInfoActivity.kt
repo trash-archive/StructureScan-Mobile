@@ -1,5 +1,6 @@
 package com.example.structurescan
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -22,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,8 +33,12 @@ class BuildingInfoActivity : ComponentActivity() {
 
         // Retrieve data from intent
         val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: ""
-        val capturedImages = intent.getStringArrayListExtra(IntentKeys.CAPTURED_IMAGES) ?: arrayListOf()
-        val finalImages = intent.getStringArrayListExtra(IntentKeys.FINAL_IMAGES) ?: arrayListOf()
+        val buildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS)
+        } ?: arrayListOf()
 
         setContent {
             MaterialTheme {
@@ -46,8 +50,10 @@ class BuildingInfoActivity : ComponentActivity() {
                         // Pass all data to AssessmentResultsActivity
                         val intent = Intent(this, AssessmentResultsActivity::class.java).apply {
                             putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
-                            putStringArrayListExtra(IntentKeys.CAPTURED_IMAGES, ArrayList(capturedImages))
-                            putStringArrayListExtra(IntentKeys.FINAL_IMAGES, ArrayList(finalImages))
+                            putParcelableArrayListExtra(
+                                IntentKeys.BUILDING_AREAS,
+                                ArrayList(buildingAreas)
+                            )
 
                             // Building info
                             putExtra(IntentKeys.BUILDING_TYPE, buildingInfo.buildingType)
@@ -268,7 +274,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp)) // adjust height as needed
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Scrollable content
         Column(
@@ -281,7 +287,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        color = Color(0xFFE8F2FF), // soft blue background
+                        color = Color(0xFFE8F2FF),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(16.dp)
@@ -310,7 +316,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                             "Optional Building Details",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF4A86E8) // darker blue for contrast
+                            color = Color(0xFF4A86E8)
                         )
                         Text(
                             "This information helps with documentation",
