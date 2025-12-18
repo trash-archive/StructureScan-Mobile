@@ -622,26 +622,33 @@ fun HistoryCard(
                     if (isSelectionMode) {
                         onSelectionToggle()
                     } else {
-                        // ✅ Navigate to AssessmentResultsActivity instead
-                        val intent = Intent(context, AssessmentResultsActivity::class.java).apply {
-                            // Pass assessment ID so it knows this is an existing assessment
+                        val intent = Intent(context, AssessmentDetailsActivity::class.java).apply {
                             putExtra("ASSESSMENT_ID", assessment.id)
+                            putExtra("ASSESSMENT_TITLE", title)
+                            putExtra("ASSESSMENT_DATE", date)
+                            putExtra("RISK_LEVEL", riskLevel)
+                            putExtra("ISSUES_COUNT", issuesCount)
+                            putExtra("CRACK_HIGH", assessment.crackHighCount)
+                            putExtra("CRACK_MODERATE", assessment.crackModerateCount)
+                            putExtra("CRACK_LOW", assessment.crackLowCount)
+                            putExtra("PAINT_HIGH", assessment.paintHighCount)
+                            putExtra("PAINT_MODERATE", assessment.paintModerateCount)
+                            putExtra("PAINT_LOW", assessment.paintLowCount)
+                            putExtra("ALGAE_HIGH", assessment.algaeHighCount)
+                            putExtra("ALGAE_MODERATE", assessment.algaeModerateCount)
+                            putExtra("ALGAE_LOW", assessment.algaeLowCount)
 
-                            // Pass assessment name
-                            putExtra(IntentKeys.ASSESSMENT_NAME, title)
-
-                            // Pass building information
-                            putExtra(IntentKeys.BUILDING_TYPE, assessment.buildingType)
-                            putExtra(IntentKeys.CONSTRUCTION_YEAR, assessment.constructionYear)
-                            putExtra(IntentKeys.RENOVATION_YEAR, assessment.renovationYear)
-                            putExtra(IntentKeys.FLOORS, assessment.floors)
-                            putExtra(IntentKeys.MATERIAL, assessment.material)
-                            putExtra(IntentKeys.FOUNDATION, assessment.foundation)
-                            putExtra(IntentKeys.ENVIRONMENT, assessment.environment)
-                            putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, ArrayList(assessment.previousIssues))
-                            putExtra(IntentKeys.OCCUPANCY, assessment.occupancy)
-                            putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, ArrayList(assessment.environmentalRisks))
-                            putExtra(IntentKeys.NOTES, assessment.notes)
+                            putExtra("BUILDING_TYPE", assessment.buildingType)
+                            putExtra("CONSTRUCTION_YEAR", assessment.constructionYear)
+                            putExtra("RENOVATION_YEAR", assessment.renovationYear)
+                            putExtra("FLOORS", assessment.floors)
+                            putExtra("MATERIAL", assessment.material)
+                            putExtra("FOUNDATION", assessment.foundation)
+                            putExtra("ENVIRONMENT", assessment.environment)
+                            putStringArrayListExtra("PREVIOUS_ISSUES", ArrayList(assessment.previousIssues))
+                            putExtra("OCCUPANCY", assessment.occupancy)
+                            putStringArrayListExtra("ENVIRONMENTAL_RISKS", ArrayList(assessment.environmentalRisks))
+                            putExtra("NOTES", assessment.notes)
                         }
                         context.startActivity(intent)
                     }
