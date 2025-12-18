@@ -1,10 +1,12 @@
 package com.example.structurescan
+
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,22 +16,28 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class EditBuildingInfoActivity : ComponentActivity() {
     private lateinit var firestore: FirebaseFirestore
@@ -41,7 +49,7 @@ class EditBuildingInfoActivity : ComponentActivity() {
         firestore = FirebaseFirestore.getInstance()
         auth = FirebaseAuth.getInstance()
 
-        // ✅ Receive building data from intent
+        // Receive building data from intent
         val assessmentName = intent.getStringExtra("assessmentName") ?: "Home Assessment"
         val buildingType = intent.getStringExtra(IntentKeys.BUILDING_TYPE) ?: ""
         val constructionYear = intent.getStringExtra(IntentKeys.CONSTRUCTION_YEAR) ?: ""
@@ -71,8 +79,8 @@ class EditBuildingInfoActivity : ComponentActivity() {
                     initialEnvironmentalRisks = environmentalRisks,
                     initialNotes = notes,
                     onBack = { finish() },
-                    onUpdateAnalysis = { updatedData ->
-                        updateBuildingInfoInFirebase(updatedData, assessmentName)
+                    onUpdateAnalysis = { updatedData, onSuccess, onFailure ->
+                        updateBuildingInfoInFirebase(updatedData, assessmentName, onSuccess, onFailure)
                     },
                     onDeleteAssessment = {
                         deleteAssessmentFromFirebase(assessmentName)
@@ -82,25 +90,35 @@ class EditBuildingInfoActivity : ComponentActivity() {
         }
     }
 
-    // ✅ Update building info in Firebase
-    private fun updateBuildingInfoInFirebase(updatedData: Map<String, Any>, originalAssessmentName: String) {
+    // Update building info in Firebase - now with callbacks
+    private fun updateBuildingInfoInFirebase(
+        updatedData: Map<String, Any>,
+        originalAssessmentName: String,
+        onSuccess: () -> Unit,
+        onFailure: (String) -> Unit
+    ) {
         val userId = auth.currentUser?.uid
         if (userId == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
+            onFailure("User not logged in")
             return
         }
 
-        // Query to find the assessment document by original name
-        firestore.collection("users")
-            .document(userId)
-            .collection("assessments")
-            .whereEqualTo("assessmentName", originalAssessmentName)
-            .get()
-            .addOnSuccessListener { documents ->
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Query to find the assessment document by original name
+                val documents = firestore.collection("users")
+                    .document(userId)
+                    .collection("assessments")
+                    .whereEqualTo("assessmentName", originalAssessmentName)
+                    .get()
+                    .await()
+
                 if (documents.isEmpty) {
                     Log.e("EditBuildingInfo", "Assessment not found: $originalAssessmentName")
-                    Toast.makeText(this, "Assessment not found in database", Toast.LENGTH_SHORT).show()
-                    return@addOnSuccessListener
+                    withContext(Dispatchers.Main) {
+                        onFailure("Assessment not found in database")
+                    }
+                    return@launch
                 }
 
                 // Update the first matching document
@@ -112,40 +130,51 @@ class EditBuildingInfoActivity : ComponentActivity() {
                     .collection("assessments")
                     .document(documentId)
                     .update(updatedData)
-                    .addOnSuccessListener {
-                        Toast.makeText(this, "Building information updated successfully!", Toast.LENGTH_SHORT).show()
+                    .await()
 
-                        // ✅ Return to AssessmentResultsActivity with updated data
-                        val resultIntent = Intent().apply {
-                            putExtra("UPDATED", true)
-                            putExtra("assessmentName", updatedData["assessmentName"] as? String ?: originalAssessmentName)
-                            putExtra(IntentKeys.BUILDING_TYPE, updatedData["buildingType"] as? String ?: "")
-                            putExtra(IntentKeys.CONSTRUCTION_YEAR, updatedData["constructionYear"] as? String ?: "")
-                            putExtra(IntentKeys.RENOVATION_YEAR, updatedData["renovationYear"] as? String ?: "")
-                            putExtra(IntentKeys.FLOORS, updatedData["floors"] as? String ?: "")
-                            putExtra(IntentKeys.MATERIAL, updatedData["material"] as? String ?: "")
-                            putExtra(IntentKeys.FOUNDATION, updatedData["foundation"] as? String ?: "")
-                            putExtra(IntentKeys.ENVIRONMENT, updatedData["environment"] as? String ?: "")
-                            putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, ArrayList(updatedData["previousIssues"] as? List<String> ?: emptyList()))
-                            putExtra(IntentKeys.OCCUPANCY, updatedData["occupancy"] as? String ?: "")
-                            putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, ArrayList(updatedData["environmentalRisks"] as? List<String> ?: emptyList()))
-                            putExtra(IntentKeys.NOTES, updatedData["notes"] as? String ?: "")
-                        }
-                        setResult(RESULT_OK, resultIntent)
-                        finish()
+                // Success - return to AssessmentResultsActivity with updated data
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@EditBuildingInfoActivity,
+                        "Building information updated successfully!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    val resultIntent = Intent().apply {
+                        putExtra("UPDATED", true)
+                        putExtra("assessmentName", updatedData["assessmentName"] as? String ?: originalAssessmentName)
+                        putExtra(IntentKeys.BUILDING_TYPE, updatedData["buildingType"] as? String ?: "")
+                        putExtra(IntentKeys.CONSTRUCTION_YEAR, updatedData["constructionYear"] as? String ?: "")
+                        putExtra(IntentKeys.RENOVATION_YEAR, updatedData["renovationYear"] as? String ?: "")
+                        putExtra(IntentKeys.FLOORS, updatedData["floors"] as? String ?: "")
+                        putExtra(IntentKeys.MATERIAL, updatedData["material"] as? String ?: "")
+                        putExtra(IntentKeys.FOUNDATION, updatedData["foundation"] as? String ?: "")
+                        putExtra(IntentKeys.ENVIRONMENT, updatedData["environment"] as? String ?: "")
+                        putStringArrayListExtra(
+                            IntentKeys.PREVIOUS_ISSUES,
+                            ArrayList(updatedData["previousIssues"] as? List<String> ?: emptyList())
+                        )
+                        putExtra(IntentKeys.OCCUPANCY, updatedData["occupancy"] as? String ?: "")
+                        putStringArrayListExtra(
+                            IntentKeys.ENVIRONMENTAL_RISKS,
+                            ArrayList(updatedData["environmentalRisks"] as? List<String> ?: emptyList())
+                        )
+                        putExtra(IntentKeys.NOTES, updatedData["notes"] as? String ?: "")
                     }
-                    .addOnFailureListener { e ->
-                        Log.e("EditBuildingInfo", "Update failed", e)
-                        Toast.makeText(this, "Failed to update: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
+                    setResult(RESULT_OK, resultIntent)
+                    onSuccess()
+                    finish()
+                }
+            } catch (e: Exception) {
+                Log.e("EditBuildingInfo", "Update failed", e)
+                withContext(Dispatchers.Main) {
+                    onFailure("Failed to update: ${e.message}")
+                }
             }
-            .addOnFailureListener { e ->
-                Log.e("EditBuildingInfo", "Query failed", e)
-                Toast.makeText(this, "Error finding assessment: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+        }
     }
 
-    // ✅ Delete assessment from Firebase
+    // Delete assessment from Firebase
     private fun deleteAssessmentFromFirebase(assessmentName: String) {
         val userId = auth.currentUser?.uid
         if (userId == null) {
@@ -153,16 +182,25 @@ class EditBuildingInfoActivity : ComponentActivity() {
             return
         }
 
-        firestore.collection("users")
-            .document(userId)
-            .collection("assessments")
-            .whereEqualTo("assessmentName", assessmentName)
-            .get()
-            .addOnSuccessListener { documents ->
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val documents = firestore.collection("users")
+                    .document(userId)
+                    .collection("assessments")
+                    .whereEqualTo("assessmentName", assessmentName)
+                    .get()
+                    .await()
+
                 if (documents.isEmpty) {
                     Log.e("EditBuildingInfo", "Assessment not found for deletion: $assessmentName")
-                    Toast.makeText(this, "Assessment not found", Toast.LENGTH_SHORT).show()
-                    return@addOnSuccessListener
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@EditBuildingInfoActivity,
+                            "Assessment not found",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return@launch
                 }
 
                 val documentId = documents.documents[0].id
@@ -173,24 +211,32 @@ class EditBuildingInfoActivity : ComponentActivity() {
                     .collection("assessments")
                     .document(documentId)
                     .delete()
-                    .addOnSuccessListener {
-                        Toast.makeText(this, "✓ Assessment deleted successfully", Toast.LENGTH_SHORT).show()
+                    .await()
 
-                        // Navigate to Dashboard
-                        val intent = Intent(this, DashboardActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
-                        finish()
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("EditBuildingInfo", "Delete failed", e)
-                        Toast.makeText(this, "Failed to delete: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@EditBuildingInfoActivity,
+                        "✓ Assessment deleted successfully",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    // Navigate to Dashboard
+                    val intent = Intent(this@EditBuildingInfoActivity, DashboardActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                    startActivity(intent)
+                    finish()
+                }
+            } catch (e: Exception) {
+                Log.e("EditBuildingInfo", "Delete failed", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@EditBuildingInfoActivity,
+                        "Failed to delete: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
-            .addOnFailureListener { e ->
-                Log.e("EditBuildingInfo", "Query failed for deletion", e)
-                Toast.makeText(this, "Error finding assessment: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+        }
     }
 }
 
@@ -210,12 +256,12 @@ fun EditBuildingInfoScreen(
     initialEnvironmentalRisks: List<String> = emptyList(),
     initialNotes: String = "",
     onBack: () -> Unit,
-    onUpdateAnalysis: (Map<String, Any>) -> Unit,
+    onUpdateAnalysis: (Map<String, Any>, onSuccess: () -> Unit, onFailure: (String) -> Unit) -> Unit,
     onDeleteAssessment: () -> Unit
 ) {
     val context = LocalContext.current
 
-    // --- State variables - Initialize with passed data ---
+    // State variables - Initialize with passed data
     var structureTitle by remember { mutableStateOf(initialAssessmentName) }
     var buildingType by remember { mutableStateOf(initialBuildingType) }
     var constructionYear by remember { mutableStateOf(initialConstructionYear) }
@@ -240,7 +286,7 @@ fun EditBuildingInfoScreen(
     // Environmental risks checkboxes - pre-populate with initial data
     val selectedRisks = remember { mutableStateListOf(*initialEnvironmentalRisks.toTypedArray()) }
 
-    // --- Delete Confirmation Dialog ---
+    // Delete Confirmation Dialog
     if (showDeleteDialog) {
         Dialog(onDismissRequest = { showDeleteDialog = false }) {
             Card(
@@ -327,7 +373,100 @@ fun EditBuildingInfoScreen(
         }
     }
 
-    // --- Clean input field composable ---
+    // ✅ IMPROVED: Enhanced Loading Dialog
+    if (isUpdating) {
+        Dialog(
+            onDismissRequest = { },
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.padding(24.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Animated progress indicator with icon
+                    Box(contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(64.dp),
+                            color = Color(0xFF2196F3),
+                            strokeWidth = 4.dp
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = Color(0xFF2196F3),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Updating building information...",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1976D2),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Animated loading bar
+                    val infiniteTransition = rememberInfiniteTransition(label = "loading")
+                    val progress by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "progress"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color(0xFFE3F2FD))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress)
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF2196F3),
+                                            Color(0xFF1976D2)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Please wait...",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+
+    // Clean input field composable
     @Composable
     fun CleanInputField(
         label: String,
@@ -368,7 +507,7 @@ fun EditBuildingInfoScreen(
         }
     }
 
-    // --- Clean dropdown field composable ---
+    // Clean dropdown field composable
     @Composable
     fun CleanDropdownField(
         label: String,
@@ -440,7 +579,7 @@ fun EditBuildingInfoScreen(
         }
     }
 
-    // --- Main Layout ---
+    // Main Layout
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -853,7 +992,16 @@ fun EditBuildingInfoScreen(
                         "notes" to notes
                     )
 
-                    onUpdateAnalysis(updatedData)
+                    onUpdateAnalysis(
+                        updatedData,
+                        { // onSuccess
+                            isUpdating = false
+                        },
+                        { errorMessage -> // onFailure
+                            isUpdating = false
+                            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                        }
+                    )
                 },
                 enabled = !isUpdating,
                 modifier = Modifier.fillMaxWidth(),
@@ -864,20 +1012,12 @@ fun EditBuildingInfoScreen(
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                if (isUpdating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(
-                        "Update Information",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
-                }
+                Text(
+                    "Update Information",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -904,17 +1044,5 @@ fun EditBuildingInfoScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun EditBuildingInfoPreview() {
-    MaterialTheme {
-        EditBuildingInfoScreen(
-            onBack = {},
-            onUpdateAnalysis = {},
-            onDeleteAssessment = {}
-        )
     }
 }

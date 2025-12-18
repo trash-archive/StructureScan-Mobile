@@ -124,7 +124,6 @@ class AssessmentDetailsActivity : ComponentActivity() {
                             currentEnvironmentalRisks.value = ArrayList((doc.get("environmentalRisks") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
                             currentNotes.value = doc.getString("notes") ?: ""
 
-                            Toast.makeText(this@AssessmentDetailsActivity, "✓ Building info updated", Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
                         Toast.makeText(this@AssessmentDetailsActivity, "Error updating data", Toast.LENGTH_SHORT).show()

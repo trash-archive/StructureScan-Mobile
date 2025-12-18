@@ -1,4 +1,5 @@
 package com.example.structurescan
+
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,17 +25,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.jvm.java
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,11 +46,13 @@ class GuideActivity : ComponentActivity() {
                     onBackClick = {
                         val intent = Intent(this, ScanActivity::class.java)
                         startActivity(intent)
+                        finish()
                     },
                     onScanNow = {
-                        val intent = Intent(this, CaptureImagesActivity::class.java)
+                        val intent = Intent(this, BuildingAreaActivity::class.java)
                         intent.putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
                         startActivity(intent)
+                        finish()
                     }
                 )
             }
@@ -67,7 +69,8 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
         "Take wide shots of the entire structure and close-ups of visible damage to help the AI assess both overall and detailed conditions.",
         "Ensure photos are clear and in focus. Blurry images reduce the AI's ability to detect structural issues like fine cracks."
     )
-    var currentTip by remember { mutableStateOf(0) }
+    var currentTip by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(6000)
@@ -200,62 +203,83 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
                 ) {
                     Icon(Icons.Filled.Wifi, null, tint = Color(0xFF2563EB), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Stable internet connection required to upload photos and receive AI-powered analysis results.",
-                        color = Color(0xFF2563EB), fontSize = 13.5.sp)
+                    Text(
+                        "Stable internet connection required to upload photos and receive AI-powered analysis results.",
+                        color = Color(0xFF2563EB),
+                        fontSize = 13.5.sp
+                    )
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                // Do's and Don'ts Cards - Same Height
+                // ✅ FIXED: Do's and Don'ts Cards - Equal Height
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min), // ✅ Parent defines intrinsic height
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Do's Card
                     Card(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(), // ✅ Fill the calculated intrinsic height
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFD1FADF)),
                         shape = RoundedCornerShape(18.dp)
                     ) {
                         Column(
-                            Modifier.padding(vertical = 16.dp, horizontal = 12.dp).fillMaxHeight(),
+                            Modifier
+                                .padding(vertical = 16.dp, horizontal = 12.dp)
+                                .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(
-                                Modifier.size(40.dp).background(Color(0xFF34D399), CircleShape),
+                                Modifier
+                                    .size(40.dp)
+                                    .background(Color(0xFF34D399), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Outlined.Check, null, tint = Color.White, modifier = Modifier.size(28.dp))
                             }
+                            Spacer(Modifier.height(4.dp))
                             Text("Do's", color = Color(0xFF097B53), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Spacer(Modifier.height(8.dp))
-                            DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Natural lighting")
-                            DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Hold phone steady")
-                            DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Multiple angles")
-                            DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Clear focus")
-                            DoDontRow(Icons.Outlined.Search, Color(0xFF34D399), "Close-up of damage")
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Natural lighting")
+                                DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Hold phone steady")
+                                DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Multiple angles")
+                                DoDontRow(Icons.Outlined.Check, Color(0xFF34D399), "Clear focus")
+                                DoDontRow(Icons.Outlined.Search, Color(0xFF34D399), "Close-up of damage")
+                            }
                         }
                     }
 
                     // Don'ts Card
                     Card(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(), // ✅ Fill the calculated intrinsic height
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE4E6)),
                         shape = RoundedCornerShape(18.dp)
                     ) {
                         Column(
                             Modifier
                                 .padding(vertical = 16.dp, horizontal = 12.dp)
-                                .fillMaxHeight(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Top
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(
-                                Modifier.size(40.dp).background(Color(0xFFF87171), CircleShape),
+                                Modifier
+                                    .size(40.dp)
+                                    .background(Color(0xFFF87171), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Outlined.Close, null, tint = Color.White, modifier = Modifier.size(28.dp))
                             }
+                            Spacer(Modifier.height(4.dp))
                             Text("Don'ts", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Spacer(Modifier.height(8.dp))
                             Column(
@@ -313,7 +337,9 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
                 // Quick Steps section
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(28.dp).background(Color(0xFF2563EB), RoundedCornerShape(5.dp)),
+                        Modifier
+                            .size(28.dp)
+                            .background(Color(0xFF2563EB), RoundedCornerShape(5.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("1-4", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -330,8 +356,11 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(Modifier.padding(14.dp)) {
+                        // ✅ FIXED: Step boxes with equal height
                         Row(
-                            Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             StepBox(Modifier.weight(1f).fillMaxHeight(), 1, "Overall structure view")
@@ -339,7 +368,9 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(
-                            Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             StepBox(Modifier.weight(1f).fillMaxHeight(), 3, "Zoom on visible damage")
@@ -434,7 +465,7 @@ fun GuideScreen(onBackClick: () -> Unit, onScanNow: () -> Unit) {
     }
 }
 
-// Helper for Do's/Don'ts row (left-aligned for Do's)
+// Helper for Do's/Don'ts row
 @Composable
 fun DoDontRow(icon: ImageVector, tint: Color, text: String) {
     Row(
@@ -442,20 +473,6 @@ fun DoDontRow(icon: ImageVector, tint: Color, text: String) {
             .fillMaxWidth()
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(7.dp))
-        Text(text, fontSize = 13.sp, color = Color.DarkGray)
-    }
-}
-
-// Helper for centered Don'ts row
-@Composable
-fun DoDontRowCentered(icon: ImageVector, tint: Color, text: String) {
-    Row(
-        modifier = Modifier.padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(7.dp))
@@ -496,7 +513,9 @@ fun StepBox(modifier: Modifier = Modifier, num: Int, label: String) {
             verticalArrangement = Arrangement.Center
         ) {
             Box(
-                Modifier.size(28.dp).background(Color(0xFF2563EB), CircleShape),
+                Modifier
+                    .size(28.dp)
+                    .background(Color(0xFF2563EB), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text("$num", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
