@@ -33,6 +33,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import java.util.*
@@ -81,37 +94,44 @@ fun BuildingAreaScreen(
     var areaToEdit by remember { mutableStateOf<BuildingArea?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var areaToDelete by remember { mutableStateOf<BuildingArea?>(null) }
+    var showInstructions by remember { mutableStateOf(true) }
 
-    // ✅ REMOVED: Top bar with assessment name
+    // Instruction Dialog
+    if (showInstructions) {
+        AreaInstructionDialog(onDismiss = { showInstructions = false })
+    }
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
         when (currentScreen) {
             AreaScreen.AreaList -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Back button at top left
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color.White,
-                        shadowElevation = 2.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            IconButton(
-                                onClick = onBackClick,
-                                modifier = Modifier.align(Alignment.CenterStart)
-                            ) {
+                    // ✅ UPDATED: Top bar with assessment name in blue
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Text(
+                                text = assessmentName,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB), // Changed to blue
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBackClick) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowBack,
                                     contentDescription = "Back",
                                     tint = Color.Black
                                 )
                             }
-                        }
-                    }
+                        },
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = Color.White
+                        )
+                    )
 
                     AreaListScreen(
                         areas = buildingAreas,
@@ -140,10 +160,12 @@ fun BuildingAreaScreen(
                 selectedArea?.let { area ->
                     CameraCaptureScreen(
                         areaName = area.name,
-                        existingPhotos = area.photoMetadata, // ✅ Pass existing photos
-                        onPhotosSubmitted = { newPhotos ->  // ✅ Changed callback name
+                        existingPhotos = area.photoMetadata,
+                        onPhotosSubmitted = { newPhotos, deletedPhotos ->  // ✅ UPDATED: Handle both
+                            // Remove deleted photos and add new photos
+                            val updatedPhotoList = (area.photoMetadata - deletedPhotos.toSet()) + newPhotos
                             val updatedArea = area.copy(
-                                photoMetadata = area.photoMetadata + newPhotos
+                                photoMetadata = updatedPhotoList
                             )
                             buildingAreas = buildingAreas.map {
                                 if (it.id == area.id) updatedArea else it
@@ -234,10 +256,93 @@ fun BuildingAreaScreen(
     }
 }
 
-// Rest of the AreaDialog, AreaListScreen, SuggestionChip, and AreaCard remain the same...
-// (Keep all other composables from your previous code)
+// ✅ UPDATED: Instruction Dialog with blue theme
+@Composable
+fun AreaInstructionDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = "Instructions",
+                    tint = Color(0xFF2563EB), // Changed to blue
+                    modifier = Modifier.size(48.dp)
+                )
 
+                Text(
+                    "Organize by Building Areas",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2563EB), // Changed title to blue
+                    textAlign = TextAlign.Center
+                )
 
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AreaInstructionItem(
+                        icon = Icons.Default.Add,
+                        text = "Create different areas of your building (e.g., Front Porch, Roof)"
+                    )
+                    AreaInstructionItem(
+                        icon = Icons.Default.CameraAlt,
+                        text = "Capture photos for each area separately"
+                    )
+                    AreaInstructionItem(
+                        icon = Icons.Default.Architecture,
+                        text = "Optional: Turn on tilt check to detect slanted walls or uneven floors"
+                    )
+                    AreaInstructionItem(
+                        icon = Icons.Default.Check,
+                        text = "Review all areas before proceeding to building info"
+                    )
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) {
+                    Text("Got it!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+// ✅ UPDATED: Instruction Item with blue icons
+@Composable
+fun AreaInstructionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = Color(0xFF2563EB), // Changed to blue
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            text,
+            fontSize = 14.sp,
+            color = Color.Black,
+            textAlign = TextAlign.Start,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+// ✅ UPDATED: Area Dialog with improved design
 @Composable
 fun AreaDialog(
     area: BuildingArea?,
@@ -248,8 +353,7 @@ fun AreaDialog(
 
     var areaName by remember { mutableStateOf(area?.name ?: "") }
     var areaDescription by remember { mutableStateOf(area?.description ?: "") }
-    // ✅ Changed: Default to TRUE instead of false
-    var enableTiltAnalysis by remember { mutableStateOf(area?.requiresStructuralTilt ?: true) }
+    var enableTiltAnalysis by remember { mutableStateOf(area?.requiresStructuralTilt ?: false) }
 
     val quickSuggestions = listOf(
         "Front Porch",
@@ -299,55 +403,48 @@ fun AreaDialog(
 
                 Spacer(Modifier.height(16.dp))
 
+                // ✅ UPDATED: Removed leading icon from Area Name field
                 OutlinedTextField(
                     value = areaName,
                     onValueChange = { areaName = it },
                     label = { Text("Area Name") },
                     placeholder = { Text("e.g., Front Porch, Roof, Backyard") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Default.Home, contentDescription = null)
-                    }
+                    singleLine = true
                 )
 
                 Spacer(Modifier.height(12.dp))
 
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Quick suggestions:",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                // ✅ UPDATED: More compact suggestion chips
+                Text(
+                    text = "Quick suggestions:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
 
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Display in a more compact grid
+                quickSuggestions.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        quickSuggestions.chunked(2).forEach { rowItems ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowItems.forEach { suggestion ->
-                                    SuggestionChip(
-                                        text = suggestion,
-                                        onClick = { areaName = suggestion },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                if (rowItems.size == 1) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
+                        rowItems.forEach { suggestion ->
+                            SuggestionChip(
+                                text = suggestion,
+                                onClick = { areaName = suggestion },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
+                    Spacer(Modifier.height(6.dp))
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = areaDescription,
@@ -359,19 +456,25 @@ fun AreaDialog(
                     maxLines = 5
                 )
 
+                // Around line 155-200 in your AreaDialog
                 Spacer(Modifier.height(16.dp))
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (enableTiltAnalysis) {
-                            Color(0xFFEFF6FF)
-                        } else {
-                            Color(0xFFF9FAFB)
-                        }
+                        containerColor = if (enableTiltAnalysis) Color(0xFFEFF6FF) else Color(0xFFF9FAFB)
                     )
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .animateContentSize(
+                                animationSpec = tween(
+                                    durationMillis = 300,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -382,11 +485,7 @@ fun AreaDialog(
                                     Icon(
                                         Icons.Default.Architecture,
                                         contentDescription = null,
-                                        tint = if (enableTiltAnalysis) {
-                                            Color(0xFF2563EB)
-                                        } else {
-                                            Color.Gray
-                                        },
+                                        tint = if (enableTiltAnalysis) Color(0xFF2563EB) else Color.Gray,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(Modifier.width(6.dp))
@@ -396,11 +495,9 @@ fun AreaDialog(
                                         fontSize = 14.sp
                                     )
                                 }
-
                                 Spacer(Modifier.height(4.dp))
-
                                 Text(
-                                    "Enable if assessing structural integrity",
+                                    "Check if walls or floors look slanted",
                                     fontSize = 11.sp,
                                     color = Color.Gray
                                 )
@@ -412,17 +509,26 @@ fun AreaDialog(
                             )
                         }
 
-                        AnimatedVisibility(visible = enableTiltAnalysis) {
+                        AnimatedVisibility(
+                            visible = enableTiltAnalysis,
+                            enter = expandVertically(
+                                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                                expandFrom = Alignment.Top
+                            ) + fadeIn(tween(350, delayMillis = 50)),
+                            exit = shrinkVertically(
+                                animationSpec = tween(250, easing = FastOutSlowInEasing),
+                                shrinkTowards = Alignment.Top
+                            ) + fadeOut(tween(200))
+                        ) {
                             Column {
-                                Spacer(Modifier.height(8.dp))
-
+                                Spacer(Modifier.height(10.dp))
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     color = Color(0xFFFEF3C7)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(8.dp),
+                                        modifier = Modifier.padding(10.dp),
                                         verticalAlignment = Alignment.Top
                                     ) {
                                         Icon(
@@ -431,12 +537,12 @@ fun AreaDialog(
                                             tint = Color(0xFFD97706),
                                             modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(Modifier.width(6.dp))
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            "Preliminary screening only. Results are estimates (±1-2° accuracy). For critical structural concerns, consult a licensed structural engineer.",
+                                            "This feature uses your phone's camera, which isn't as accurate as professional equipment. It's useful for spotting potential issues early, but always consult an inspector with proper tools for important decisions.",
                                             fontSize = 11.sp,
                                             color = Color(0xFF92400E),
-                                            lineHeight = 14.sp
+                                            lineHeight = 16.sp
                                         )
                                     }
                                 }
@@ -510,49 +616,8 @@ fun AreaListScreen(
     ) {
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
         ) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White)
-                        .padding(vertical = 24.dp, horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Default.Home,
-                        contentDescription = "Building",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .background(Color(0xFF8B5CF6), CircleShape)
-                            .padding(16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        "Organize by Areas",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-
-                    Text(
-                        "Create different areas of your building and capture photos for each section.",
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            }
-
-            item {
-                Spacer(Modifier.height(16.dp))
-            }
-
             if (areas.isEmpty()) {
                 item {
                     Column(
@@ -604,11 +669,38 @@ fun AreaListScreen(
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     OutlinedButton(
                         onClick = onCreateNewArea,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .drawWithContent {
+                                drawContent()
+                                // Draw dashed border
+                                val strokeWidth = 2.dp.toPx()
+                                val dashWidth = 8.dp.toPx()
+                                val dashGap = 6.dp.toPx()
+
+                                drawRoundRect(
+                                    color = Color(0xFF2563EB),
+                                    topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
+                                    size = Size(
+                                        size.width - strokeWidth,
+                                        size.height - strokeWidth
+                                    ),
+                                    cornerRadius = CornerRadius(8.dp.toPx()),
+                                    style = Stroke(
+                                        width = strokeWidth,
+                                        pathEffect = PathEffect.dashPathEffect(
+                                            floatArrayOf(dashWidth, dashGap),
+                                            0f
+                                        )
+                                    )
+                                )
+                            },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF2563EB)
+                            contentColor = Color(0xFF2563EB),
+                            containerColor = Color.Transparent
                         ),
+                        border = null,
                         contentPadding = PaddingValues(vertical = 14.dp)
                     ) {
                         Icon(
@@ -691,7 +783,7 @@ fun AreaListScreen(
     }
 }
 
-// ✅ SuggestionChip - Added to BuildingAreaActivity
+// ✅ UPDATED: More compact and refined suggestion chip
 @Composable
 fun SuggestionChip(
     text: String,
@@ -701,19 +793,19 @@ fun SuggestionChip(
     Surface(
         modifier = modifier
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(6.dp),
         color = Color(0xFFF3F4F6),
         border = BorderStroke(1.dp, Color(0xFFE5E7EB))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp), // Reduced padding
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = text,
-                fontSize = 14.sp,
+                fontSize = 13.sp, // Slightly smaller font
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF374151),
                 textAlign = TextAlign.Center
@@ -722,6 +814,7 @@ fun SuggestionChip(
     }
 }
 
+// ✅ UPDATED: Enhanced Area Card with better visual hierarchy
 @Composable
 fun AreaCard(
     area: BuildingArea,
@@ -733,7 +826,7 @@ fun AreaCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp) // Slightly increased elevation
     ) {
         Column(
             modifier = Modifier
@@ -749,16 +842,17 @@ fun AreaCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
+                    // ✅ UPDATED: Changed icon background to blue theme
                     Surface(
                         modifier = Modifier.size(48.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFEDE9FE)
+                        shape = RoundedCornerShape(10.dp), // Slightly more rounded
+                        color = Color(0xFFEFF6FF) // Blue tint
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Home,
                                 contentDescription = null,
-                                tint = Color(0xFF8B5CF6),
+                                tint = Color(0xFF2563EB), // Changed to blue
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -767,7 +861,6 @@ fun AreaCard(
                     Spacer(Modifier.width(12.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        // ✅ NEW: Area name with tilt indicator
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -778,7 +871,6 @@ fun AreaCard(
                                 color = Color.Black
                             )
 
-                            // ✅ NEW: Tilt indicator badge
                             if (area.requiresStructuralTilt) {
                                 Spacer(Modifier.width(8.dp))
                                 Surface(
@@ -810,11 +902,21 @@ fun AreaCard(
 
                         Spacer(Modifier.height(4.dp))
 
-                        Text(
-                            text = "${area.photos.size} photo${if (area.photos.size != 1) "s" else ""}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Image,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${area.photos.size} photo${if (area.photos.size != 1) "s" else ""}",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
@@ -842,6 +944,19 @@ fun AreaCard(
                         )
                     }
                 }
+            }
+
+            // ✅ Show description if exists
+            if (area.description.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = area.description,
+                    fontSize = 13.sp,
+                    color = Color(0xFF6B7280),
+                    lineHeight = 18.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(Modifier.height(12.dp))

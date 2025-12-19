@@ -53,8 +53,8 @@ import java.util.*
 @Composable
 fun CameraCaptureScreen(
     areaName: String,
-    existingPhotos: List<PhotoMetadata> = emptyList(), // ✅ Receive existing photos
-    onPhotosSubmitted: (List<PhotoMetadata>) -> Unit,  // ✅ Changed: return LIST
+    existingPhotos: List<PhotoMetadata> = emptyList(),
+    onPhotosSubmitted: (List<PhotoMetadata>, List<PhotoMetadata>) -> Unit,  // ✅ NEW: returns new photos AND deleted photos
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -68,6 +68,7 @@ fun CameraCaptureScreen(
 
     // ✅ Initialize with existing photos
     var capturedPhotos by remember { mutableStateOf(existingPhotos) }
+    var deletedPhotos by remember { mutableStateOf<List<PhotoMetadata>>(emptyList()) }  // ✅ NEW: Track deletions
     var showGallery by remember { mutableStateOf(false) }
 
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -86,18 +87,20 @@ fun CameraCaptureScreen(
         if (showGallery) {
             PhotoGalleryView(
                 photos = capturedPhotos,
-                onBack = { showGallery = false }, // ✅ Go back to camera
+                onBack = { showGallery = false },
                 onDeletePhoto = { photo ->
                     photoToDelete = photo
                     showDeleteDialog = true
                 },
                 onSubmitPhotos = {
-                    // ✅ Submit only NEW photos (not existing ones)
+                    // ✅ UPDATED: Submit new photos and deleted photos
                     val newPhotos = capturedPhotos.filterNot { it in existingPhotos }
-                    onPhotosSubmitted(newPhotos)
+                    onPhotosSubmitted(newPhotos, deletedPhotos)
                 },
                 onClearAll = {
-                    capturedPhotos = existingPhotos // Reset to existing only
+                    // ✅ UPDATED: Mark all existing photos as deleted
+                    deletedPhotos = existingPhotos
+                    capturedPhotos = emptyList()
                     showGallery = false
                 }
             )
@@ -159,7 +162,7 @@ fun CameraCaptureScreen(
                 Spacer(modifier = Modifier.width(48.dp))
             }
 
-            // ✅ Bottom controls - REDESIGNED
+            // ✅ Bottom controls
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -269,12 +272,12 @@ fun CameraCaptureScreen(
                         }
                     }
 
-                    // ✅ Save/Submit button (bottom right)
-                    if (capturedPhotos.size > existingPhotos.size) {
+                    // ✅ UPDATED: Save/Submit button - show if there are new photos OR deletions
+                    if (capturedPhotos.size > existingPhotos.size || deletedPhotos.isNotEmpty()) {
                         FloatingActionButton(
                             onClick = {
                                 val newPhotos = capturedPhotos.filterNot { it in existingPhotos }
-                                onPhotosSubmitted(newPhotos)
+                                onPhotosSubmitted(newPhotos, deletedPhotos)
                             },
                             modifier = Modifier.size(56.dp),
                             containerColor = Color(0xFF059669),
@@ -317,7 +320,7 @@ fun CameraCaptureScreen(
         )
     }
 
-    // Delete confirmation dialog
+    // ✅ UPDATED: Delete confirmation dialog
     if (showDeleteDialog && photoToDelete != null) {
         AlertDialog(
             onDismissRequest = {
@@ -347,6 +350,10 @@ fun CameraCaptureScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        // ✅ NEW: Track if it's an existing photo being deleted
+                        if (photoToDelete in existingPhotos) {
+                            deletedPhotos = deletedPhotos + photoToDelete!!
+                        }
                         capturedPhotos = capturedPhotos.filter { it != photoToDelete }
                         showDeleteDialog = false
                         photoToDelete = null
@@ -370,10 +377,7 @@ fun CameraCaptureScreen(
     }
 }
 
-// Keep all other functions (PhotoGalleryView, PhotoGridItem, PhotoLocationDialog, etc.) the same as before
-
-
-// ✅ NEW: Photo Gallery View
+// ✅ Photo Gallery View
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotoGalleryView(
@@ -442,6 +446,7 @@ fun PhotoGalleryView(
             }
         },
         bottomBar = {
+            // ✅ UPDATED: Always show save button when there are photos
             if (photos.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -763,7 +768,7 @@ fun PhotoGridItem(
     }
 }
 
-// Photo Location Dialog (same as before)
+// Photo Location Dialog
 @Composable
 fun PhotoLocationDialog(
     onDismiss: () -> Unit,
@@ -895,7 +900,7 @@ fun PhotoLocationDialog(
     }
 }
 
-// Helper functions (same as before)
+// Helper functions
 private fun setupCamera(
     context: Context,
     lifecycleOwner: LifecycleOwner,

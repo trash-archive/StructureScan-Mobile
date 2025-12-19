@@ -26,7 +26,8 @@
         android:theme="@style/Theme.StructureScan">
         <activity
             android:name=".BuildingAreaActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait"/>
         <!-- Assessment Activities -->
         <activity
             android:name=".AssessmentDetailsActivity"

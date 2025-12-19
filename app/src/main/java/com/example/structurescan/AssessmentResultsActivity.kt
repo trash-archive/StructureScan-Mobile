@@ -2249,7 +2249,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
         it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.MINOR
     }
     val totalImages = allAssessments.size
-    val hasStructuralIssues = severeCount + moderateCount + minorCount > 0
+    val hasStructuralIssues = (severeCount + moderateCount + minorCount) > 0
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -2259,6 +2259,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E5E5))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2279,9 +2280,9 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "Structural Tilt Analysis",
+                        text = "Wall & Floor Tilt Check",  // ✅ USER-FRIENDLY TITLE
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.Black
@@ -2289,8 +2290,9 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
+            // ✅ SIMPLIFIED WARNING MESSAGE
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = Color(0xFFFEF3C7),
@@ -2308,16 +2310,17 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Preliminary screening (±1-2° accuracy). Professional surveying recommended for critical concerns.",
+                        "This is a rough estimate from your phone camera. For accurate measurements, hire a professional with proper surveying tools.",  // ✅ SIMPLE & DIRECT
                         fontSize = 11.sp,
                         color = Color(0xFF92400E),
-                        lineHeight = 14.sp
+                        lineHeight = 16.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
+            // ✅ RESULTS SUMMARY
             if (!hasStructuralIssues) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -2328,7 +2331,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "No significant structural tilt detected",
+                        "Walls and floors look level",  // ✅ EVERYDAY LANGUAGE
                         fontSize = 14.sp,
                         color = Color(0xFF16A34A),
                         fontWeight = FontWeight.Medium
@@ -2336,36 +2339,40 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                 }
             } else {
                 Text(
-                    "Detected issues in ${severeCount + moderateCount + minorCount} of ${totalImages} analyzed images",
+                    "Found tilt in ${severeCount + moderateCount + minorCount} of $totalImages checked photos",  // ✅ CLEAR COUNT
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
+                // ✅ SIMPLIFIED SEVERITY ROWS
                 if (severeCount > 0) {
-                    StructuralQualityRow(
-                        label = "Severe (5-10° building lean)",
+                    TiltQualityRow(
+                        label = "Serious slant (needs expert)",  // ✅ USER-FRIENDLY
+                        description = "Walls or floors leaning more than 5°",
                         count = severeCount,
-                        percent = ((severeCount * 100f) / totalImages).toInt(),
+                        percent = (severeCount * 100f / totalImages).toInt(),
                         color = Color(0xFFEF4444)
                     )
                 }
 
                 if (moderateCount > 0) {
-                    StructuralQualityRow(
-                        label = "Moderate (2-5°)",
+                    TiltQualityRow(
+                        label = "Noticeable tilt",  // ✅ USER-FRIENDLY
+                        description = "Tilted 2-5° - worth checking",
                         count = moderateCount,
-                        percent = ((moderateCount * 100f) / totalImages).toInt(),
+                        percent = (moderateCount * 100f / totalImages).toInt(),
                         color = Color(0xFFF59E0B)
                     )
                 }
 
                 if (minorCount > 0) {
-                    StructuralQualityRow(
-                        label = "Minor (<2°)",
+                    TiltQualityRow(
+                        label = "Slight tilt",  // ✅ USER-FRIENDLY
+                        description = "Small tilt under 2° - usually normal",
                         count = minorCount,
-                        percent = ((minorCount * 100f) / totalImages).toInt(),
+                        percent = (minorCount * 100f / totalImages).toInt(),
                         color = Color(0xFF3B82F6)
                     )
                 }
@@ -2374,8 +2381,15 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
     }
 }
 
+// ✅ NEW SIMPLIFIED ROW COMPONENT
 @Composable
-fun StructuralQualityRow(label: String, count: Int, percent: Int, color: Color) {
+fun TiltQualityRow(
+    label: String,
+    description: String,
+    count: Int,
+    percent: Int,
+    color: Color
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2390,29 +2404,38 @@ fun StructuralQualityRow(label: String, count: Int, percent: Int, color: Color) 
             Surface(
                 shape = CircleShape,
                 color = color.copy(alpha = 0.15f),
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = "$count",
+                        text = count.toString(),
                         color = color,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 13.sp
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                color = Color(0xFF374151)
-            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF374151)
+                )
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = Color(0xFF6B7280),
+                    lineHeight = 14.sp
+                )
+            }
         }
 
         Text(
             text = "$percent%",
             fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             color = color
         )
     }
@@ -2485,6 +2508,7 @@ fun ImageAnalysisCard(imageNumber: Int, assessment: ImageAssessment) {
                     }
                 }
 
+                // Inside ImageAnalysisCard, replace the structural tilt section:
                 assessment.structuralTilt?.let { structural ->
                     if (structural.tiltSeverity != StructuralTiltAnalyzer.TiltSeverity.NONE) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -2494,7 +2518,7 @@ fun ImageAnalysisCard(imageNumber: Int, assessment: ImageAssessment) {
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Architecture,
-                                contentDescription = "Structural Tilt",
+                                contentDescription = "Tilt detected",
                                 tint = when (structural.tiltSeverity) {
                                     StructuralTiltAnalyzer.TiltSeverity.SEVERE -> Color(0xFFEF4444)
                                     StructuralTiltAnalyzer.TiltSeverity.MODERATE -> Color(0xFFF59E0B)
@@ -2503,8 +2527,17 @@ fun ImageAnalysisCard(imageNumber: Int, assessment: ImageAssessment) {
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(Modifier.width(4.dp))
+                            // ✅ SIMPLIFIED TEXT
                             Text(
-                                "Tilt: ${structural.tiltSeverity.name} ${structural.averageVerticalTilt.toInt()}°",
+                                when (structural.tiltSeverity) {
+                                    StructuralTiltAnalyzer.TiltSeverity.SEVERE ->
+                                        "Serious tilt: ${structural.averageVerticalTilt.toInt()}°"
+                                    StructuralTiltAnalyzer.TiltSeverity.MODERATE ->
+                                        "Noticeable tilt: ${structural.averageVerticalTilt.toInt()}°"
+                                    StructuralTiltAnalyzer.TiltSeverity.MINOR ->
+                                        "Slight tilt: ${structural.averageVerticalTilt.toInt()}°"
+                                    else -> "Level"
+                                },
                                 fontSize = 12.sp,
                                 color = when (structural.tiltSeverity) {
                                     StructuralTiltAnalyzer.TiltSeverity.SEVERE -> Color(0xFFEF4444)
