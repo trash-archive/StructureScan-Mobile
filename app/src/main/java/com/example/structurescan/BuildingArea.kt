@@ -5,7 +5,18 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
 /**
- * Updated BuildingArea with optional structural tilt analysis
+ * Photo metadata including optional location name
+ */
+@Parcelize
+data class PhotoMetadata(
+    val uri: Uri,
+    val locationName: String = "",  // Optional specific location within the area
+    val tilt: TiltMeasurement? = null,
+    val capturedAt: Long = System.currentTimeMillis()
+) : Parcelable
+
+/**
+ * Updated BuildingArea with PhotoMetadata
  */
 @Parcelize
 data class BuildingArea(
@@ -13,8 +24,11 @@ data class BuildingArea(
     val name: String,
     val description: String = "",
     val areaType: AreaType = AreaType.OTHER,
-    val requiresStructuralTilt: Boolean = false,  // ✅ NEW: Optional tilt analysis
-    val photos: List<Uri> = emptyList(),
-    val photoTilts: List<TiltMeasurement?> = emptyList(),
+    val requiresStructuralTilt: Boolean = false,
+    val photoMetadata: List<PhotoMetadata> = emptyList(),  // ✅ NEW: Stores photos with metadata
     val createdAt: Long = System.currentTimeMillis()
-) : Parcelable
+) : Parcelable {
+    // Helper property for backward compatibility
+    val photos: List<Uri> get() = photoMetadata.map { it.uri }
+    val photoTilts: List<TiltMeasurement?> get() = photoMetadata.map { it.tilt }
+}

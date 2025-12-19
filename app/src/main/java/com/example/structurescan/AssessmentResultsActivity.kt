@@ -259,17 +259,17 @@ class AssessmentResultsActivity : ComponentActivity() {
         occupancy: String,
         environmentalRisks: List<String>,
         notes: String,
-        isReanalysis: Boolean = false
+        isReanalysis: Boolean = false  // ✅ Use this parameter instead of intent
     ): Boolean {
         val currentUser = firebaseAuth.currentUser
         if (currentUser == null) return false
         val userId = currentUser.uid
 
         return try {
-            // Check if this is a re-analysis
-            val isActualReanalysis = intent.getBooleanExtra("IS_REANALYSIS", false)
+            // ✅ FIXED: Use the isReanalysis parameter passed from the function
+            val isActualReanalysis = isReanalysis && currentAssessmentId != null
 
-            val assessmentId = if (isActualReanalysis && currentAssessmentId != null) {
+            val assessmentId = if (isActualReanalysis) {
                 currentAssessmentId!!
             } else {
                 UUID.randomUUID().toString().also { currentAssessmentId = it }
@@ -396,7 +396,7 @@ class AssessmentResultsActivity : ComponentActivity() {
             // Save to Firestore
             kotlinx.coroutines.runBlocking(Dispatchers.IO) {
                 if (isActualReanalysis) {
-                    // Get current reanalysisCount and increment it
+                    // ✅ UPDATE existing document
                     val docRef = firestore.collection("users")
                         .document(userId)
                         .collection("assessments")
@@ -409,9 +409,12 @@ class AssessmentResultsActivity : ComponentActivity() {
                     assessmentData["reanalysisCount"] = currentReanalysisCount + 1
                     assessmentData["lastReanalysisDate"] = SimpleDateFormat("MMMM dd, yyyy HH:mm", Locale.getDefault()).format(Date())
 
+                    // ✅ Use update instead of set
                     docRef.update(assessmentData as Map<String, Any>).await()
+
+                    Log.d("FirebaseUpload", "✅ Re-analysis updated successfully for ID: $assessmentId")
                 } else {
-                    // New assessment: Initialize reanalysisCount to 0
+                    // ✅ CREATE new document
                     assessmentData["reanalysisCount"] = 0
 
                     firestore.collection("users")
@@ -420,6 +423,8 @@ class AssessmentResultsActivity : ComponentActivity() {
                         .document(assessmentId)
                         .set(assessmentData)
                         .await()
+
+                    Log.d("FirebaseUpload", "✅ New assessment created with ID: $assessmentId")
                 }
             }
 
@@ -1315,12 +1320,6 @@ fun AssessmentResultsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Structural Tilt Summary
-                if (summary.areaAnalyses.any { it.structuralAnalysisEnabled }) {
-                    StructuralTiltSummaryCard(summary = summary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
                 // Building Information Card
                 BuildingInformationCard(
                     buildingType = currentBuildingType,
@@ -1345,68 +1344,139 @@ fun AssessmentResultsScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E5E5))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFF57C00),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Detection Summary",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    modifier = Modifier.size(32.dp),
+                                    shape = CircleShape,
+                                    color = Color(0xFFFFF3E0)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF57C00),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Detection Summary",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.Black
+                                )
+                            }
+
+                            if (summary.detectionSummary.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFEFF6FF)
+                                ) {
+                                    Text(
+                                        text = "${summary.totalIssues} ${if (summary.totalIssues == 1) "Issue" else "Issues"}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF2563EB),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         if (summary.detectionSummary.isEmpty()) {
-                            Text(
-                                text = "No visible damage detected",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF16A34A),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "No visible damage detected",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF059669),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         } else {
                             summary.detectionSummary.forEach { item ->
-                                Row(
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFFF9FAFB)
+                                    )
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = item.damageType,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color.Black
-                                        )
-                                        Text(
-                                            text = "Avg Confidence: ${(item.avgConfidence * 100).toInt()}%",
-                                            fontSize = 12.sp,
-                                            color = Color.Gray
-                                        )
-                                    }
-
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFF2196F3),
-                                        modifier = Modifier.size(32.dp)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = "${item.count}",
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
-                                            )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = when {
+                                                    item.damageType.contains("Spalling") ||
+                                                            item.damageType.contains("Major Crack") -> Color(0xFFFFEBEE)
+                                                    item.damageType.contains("Algae") -> Color(0xFFFFF3E0)
+                                                    else -> Color(0xFFF0FDF4)
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = "${item.count}",
+                                                        color = when {
+                                                            item.damageType.contains("Spalling") ||
+                                                                    item.damageType.contains("Major Crack") -> Color(0xFFDC2626)
+                                                            item.damageType.contains("Algae") -> Color(0xFFF59E0B)
+                                                            else -> Color(0xFF16A34A)
+                                                        },
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            Column {
+                                                Text(
+                                                    text = item.damageType,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.Black
+                                                )
+                                                Text(
+                                                    text = "Avg Confidence: ${(item.avgConfidence * 100).toInt()}%",
+                                                    fontSize = 12.sp,
+                                                    color = Color(0xFF6B7280)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1417,13 +1487,55 @@ fun AssessmentResultsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Area-by-Area Analysis
-                Text(
-                    text = "Area-by-Area Analysis",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
+                // Structural Tilt Summary
+                if (summary.areaAnalyses.any { it.structuralAnalysisEnabled }) {
+                    StructuralTiltSummaryCard(summary = summary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // ✅ UPDATED: Area-by-Area Analysis Header
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(32.dp),
+                            shape = CircleShape,
+                            color = Color.White
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Assignment,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2563EB),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Area-by-Area Analysis",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1E40AF)
+                            )
+                            Text(
+                                text = "${summary.areaAnalyses.size} ${if (summary.areaAnalyses.size == 1) "area" else "areas"} analyzed",
+                                fontSize = 12.sp,
+                                color = Color(0xFF3B82F6)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -1566,6 +1678,7 @@ fun AssessmentResultsScreen(
                                         Spacer(Modifier.height(16.dp))
                                     }
 
+                                    // Image Analysis Section
                                     Text(
                                         text = "Image Analysis",
                                         fontSize = 13.sp,
@@ -1576,14 +1689,239 @@ fun AssessmentResultsScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
 
                                     areaAnalysis.imageAssessments.forEachIndexed { index, imageAssessment ->
-                                        ImageAnalysisCard(
-                                            imageNumber = index + 1,
-                                            assessment = imageAssessment
-                                        )
+                                        // ✅ NEW: Get location name from PhotoMetadata
+                                        val area = buildingAreas.find { it.id == areaAnalysis.areaId }
+                                        val photoMeta = area?.photoMetadata?.getOrNull(index)
+                                        val displayName = if (photoMeta?.locationName?.isNotEmpty() == true) {
+                                            photoMeta.locationName
+                                        } else {
+                                            "Image ${index + 1}"
+                                        }
+
+                                        var showFullImage by remember { mutableStateOf(false) }
+
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9))
+                                        ) {
+                                            Row(modifier = Modifier.padding(12.dp)) {
+                                                Image(
+                                                    painter = rememberAsyncImagePainter(imageAssessment.imageUri),
+                                                    contentDescription = displayName,
+                                                    modifier = Modifier
+                                                        .size(80.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Color.Gray)
+                                                        .clickable { showFullImage = true },
+                                                    contentScale = ContentScale.Crop
+                                                )
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    // ✅ UPDATED: Display location name with icon
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (photoMeta?.locationName?.isNotEmpty() == true) {
+                                                                    Icons.Default.LocationOn
+                                                                } else {
+                                                                    Icons.Default.Image
+                                                                },
+                                                                contentDescription = null,
+                                                                tint = Color(0xFF2196F3),
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(
+                                                                text = displayName,
+                                                                fontSize = 15.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = Color.Black
+                                                            )
+                                                        }
+
+                                                        Surface(
+                                                            shape = RoundedCornerShape(6.dp),
+                                                            color = when (imageAssessment.imageRisk) {
+                                                                "High" -> Color(0xFFFFEEEE)
+                                                                "Moderate" -> Color(0xFFFFF3E0)
+                                                                "Low" -> Color(0xFFF0FDF4)
+                                                                else -> Color(0xFFF0FDF4)
+                                                            }
+                                                        ) {
+                                                            Text(
+                                                                text = when (imageAssessment.imageRisk) {
+                                                                    "High" -> "HIGH"
+                                                                    "Moderate" -> "MODERATE"
+                                                                    "Low" -> "LOW"
+                                                                    else -> "PLAIN"
+                                                                },
+                                                                fontSize = 11.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = when (imageAssessment.imageRisk) {
+                                                                    "High" -> Color(0xFFDC2626)
+                                                                    "Moderate" -> Color(0xFFF59E0B)
+                                                                    "Low" -> Color(0xFF16A34A)
+                                                                    else -> Color(0xFF16A34A)
+                                                                },
+                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                            )
+                                                        }
+                                                    }
+
+                                                    // Structural Tilt Info
+                                                    imageAssessment.structuralTilt?.let { structural ->
+                                                        if (structural.tiltSeverity != StructuralTiltAnalyzer.TiltSeverity.NONE) {
+                                                            Spacer(modifier = Modifier.height(6.dp))
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Architecture,
+                                                                    contentDescription = "Structural Tilt",
+                                                                    tint = when (structural.tiltSeverity) {
+                                                                        StructuralTiltAnalyzer.TiltSeverity.SEVERE -> Color(0xFFEF4444)
+                                                                        StructuralTiltAnalyzer.TiltSeverity.MODERATE -> Color(0xFFF59E0B)
+                                                                        else -> Color(0xFF3B82F6)
+                                                                    },
+                                                                    modifier = Modifier.size(14.dp)
+                                                                )
+                                                                Spacer(Modifier.width(4.dp))
+                                                                Text(
+                                                                    "Tilt: ${structural.tiltSeverity.name} ${structural.averageVerticalTilt.toInt()}°",
+                                                                    fontSize = 12.sp,
+                                                                    color = when (structural.tiltSeverity) {
+                                                                        StructuralTiltAnalyzer.TiltSeverity.SEVERE -> Color(0xFFEF4444)
+                                                                        StructuralTiltAnalyzer.TiltSeverity.MODERATE -> Color(0xFFF59E0B)
+                                                                        else -> Color(0xFF3B82F6)
+                                                                    },
+                                                                    fontWeight = FontWeight.Medium
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                                    // Detected Issues
+                                                    if (imageAssessment.detectedIssues.isEmpty()) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.CheckCircle,
+                                                                contentDescription = null,
+                                                                tint = Color(0xFF16A34A),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(
+                                                                text = "Clean surface - No damage detected",
+                                                                fontSize = 13.sp,
+                                                                color = Color(0xFF16A34A)
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = "Confidence: ${(imageAssessment.confidence * 100).toInt()}%",
+                                                            fontSize = 12.sp,
+                                                            color = Color.Gray
+                                                        )
+                                                    } else {
+                                                        imageAssessment.detectedIssues.forEach { issue ->
+                                                            Text(
+                                                                text = issue.damageType,
+                                                                fontSize = 13.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = Color.Black
+                                                            )
+                                                            Text(
+                                                                text = "Confidence: ${(issue.confidence * 100).toInt()}%",
+                                                                fontSize = 12.sp,
+                                                                color = Color.Gray
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Full Image Dialog
+                                            if (showFullImage) {
+                                                Dialog(
+                                                    onDismissRequest = { showFullImage = false },
+                                                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(Color.Black.copy(alpha = 0.9f))
+                                                            .clickable { showFullImage = false },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Column {
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .padding(16.dp),
+                                                                horizontalArrangement = Arrangement.End
+                                                            ) {
+                                                                IconButton(
+                                                                    onClick = { showFullImage = false },
+                                                                    modifier = Modifier.background(
+                                                                        Color.White.copy(alpha = 0.2f),
+                                                                        CircleShape
+                                                                    )
+                                                                ) {
+                                                                    Icon(
+                                                                        imageVector = Icons.Default.Close,
+                                                                        contentDescription = "Close",
+                                                                        tint = Color.White,
+                                                                        modifier = Modifier.size(24.dp)
+                                                                    )
+                                                                }
+                                                            }
+
+                                                            Image(
+                                                                painter = rememberAsyncImagePainter(imageAssessment.imageUri),
+                                                                contentDescription = "Full $displayName",
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .padding(horizontal = 16.dp),
+                                                                contentScale = ContentScale.Fit
+                                                            )
+
+                                                            Spacer(modifier = Modifier.height(16.dp))
+
+                                                            Text(
+                                                                text = "$displayName - Tap anywhere to close",
+                                                                color = Color.White,
+                                                                fontSize = 14.sp,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .padding(16.dp),
+                                                                textAlign = TextAlign.Center
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         if (index < areaAnalysis.imageAssessments.size - 1) {
                                             Spacer(modifier = Modifier.height(8.dp))
                                         }
                                     }
+
 
                                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -1806,7 +2144,7 @@ fun RecommendationCard(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$locationCount image${if (locationCount > 1) "s" else ""} detected • AI Confidence: ${(avgConfidence * 100).toInt()}%",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = Color(0xFF666666)
                         )
                     }
@@ -1901,40 +2239,62 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
 
     if (allAssessments.isEmpty()) return
 
-    val severeCount = allAssessments.count { it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.SEVERE }
-    val moderateCount = allAssessments.count { it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.MODERATE }
-    val minorCount = allAssessments.count { it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.MINOR }
+    val severeCount = allAssessments.count {
+        it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.SEVERE
+    }
+    val moderateCount = allAssessments.count {
+        it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.MODERATE
+    }
+    val minorCount = allAssessments.count {
+        it.structuralTilt?.tiltSeverity == StructuralTiltAnalyzer.TiltSeverity.MINOR
+    }
     val totalImages = allAssessments.size
-    val hasStructuralIssues = (severeCount + moderateCount + minorCount) > 0
+    val hasStructuralIssues = severeCount + moderateCount + minorCount > 0
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E5E5))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Architecture,
-                    contentDescription = null,
-                    tint = Color(0xFF2563EB),
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Structural Tilt Analysis",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.Black
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Architecture,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Structural Tilt Analysis",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Black
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFFEF3C7)
+                color = Color(0xFFFEF3C7),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
@@ -1976,7 +2336,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                 }
             } else {
                 Text(
-                    "Detected issues in ${severeCount + moderateCount + minorCount} of $totalImages analyzed images",
+                    "Detected issues in ${severeCount + moderateCount + minorCount} of ${totalImages} analyzed images",
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
@@ -1985,9 +2345,9 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
 
                 if (severeCount > 0) {
                     StructuralQualityRow(
-                        label = "Severe (5-10°+ building lean)",
+                        label = "Severe (5-10° building lean)",
                         count = severeCount,
-                        percent = (severeCount * 100f / totalImages).toInt(),
+                        percent = ((severeCount * 100f) / totalImages).toInt(),
                         color = Color(0xFFEF4444)
                     )
                 }
@@ -1996,7 +2356,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                     StructuralQualityRow(
                         label = "Moderate (2-5°)",
                         count = moderateCount,
-                        percent = (moderateCount * 100f / totalImages).toInt(),
+                        percent = ((moderateCount * 100f) / totalImages).toInt(),
                         color = Color(0xFFF59E0B)
                     )
                 }
@@ -2005,7 +2365,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                     StructuralQualityRow(
                         label = "Minor (<2°)",
                         count = minorCount,
-                        percent = (minorCount * 100f / totalImages).toInt(),
+                        percent = ((minorCount * 100f) / totalImages).toInt(),
                         color = Color(0xFF3B82F6)
                     )
                 }
@@ -2019,20 +2379,42 @@ fun StructuralQualityRow(label: String, count: Int, percent: Int, color: Color) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(color, CircleShape)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = color.copy(alpha = 0.15f),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "$count",
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = Color(0xFF374151)
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = label, fontSize = 13.sp, color = Color(0xFF374151))
         }
-        Text(text = "$count ($percent%)", fontSize = 13.sp, color = Color.Gray)
+
+        Text(
+            text = "$percent%",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = color
+        )
     }
 }
 
@@ -2154,7 +2536,7 @@ fun ImageAnalysisCard(imageNumber: Int, assessment: ImageAssessment) {
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Confidence: ${(assessment.confidence * 100).toInt()}%",
+                        text = "AI Confidence: ${(assessment.confidence * 100).toInt()}%",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -2258,7 +2640,8 @@ fun BuildingInformationCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E5E5))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -2269,13 +2652,21 @@ fun BuildingInformationCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = Color(0xFF2196F3),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = Color(0xFF2196F3),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "Building Information",
                         fontSize = 16.sp,
@@ -2284,10 +2675,7 @@ fun BuildingInformationCard(
                     )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { onEditClick() },
                         modifier = Modifier.size(32.dp)
@@ -2300,102 +2688,119 @@ fun BuildingInformationCard(
                         )
                     }
 
-                    val rotation by animateFloatAsState(if (isExpanded) 180f else 0f, label = "rotation")
+                    val rotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 0f else -90f,
+                        label = "toggle"
+                    )
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = if (isExpanded) "Collapse" else "Expand",
-                        modifier = Modifier.rotate(rotation),
-                        tint = Color.Gray
+                        modifier = Modifier
+                            .size(24.dp)
+                            .rotate(rotation),
+                        tint = Color(0xFF9CA3AF)
                     )
                 }
             }
 
             AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(top = 16.dp)) {
-                    val hasBuildingInfo = buildingType.isNotEmpty() || constructionYear.isNotEmpty() ||
-                            renovationYear.isNotEmpty() || floors.isNotEmpty() || material.isNotEmpty() ||
-                            foundation.isNotEmpty() || environment.isNotEmpty() || previousIssues.isNotEmpty() ||
-                            occupancy.isNotEmpty() || environmentalRisks.isNotEmpty() || notes.isNotEmpty()
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    if (!hasBuildingInfo) {
+                    // ✅ Check if any field has data
+                    val hasData = listOf(
+                        buildingType, constructionYear, renovationYear,
+                        floors, material, foundation, environment, occupancy, notes
+                    ).any { it.isNotBlank() } || previousIssues.isNotEmpty() || environmentalRisks.isNotEmpty()
+
+                    if (!hasData) {
+                        // ✅ UPDATED: Removed icon, adjusted description
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "No info",
-                                tint = Color(0xFF9CA3AF),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                "No Building Information Available",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF374151),
-                                textAlign = TextAlign.Center
+                                text = "No building information added",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6B7280),
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     } else {
-                        if (buildingType.isNotEmpty() || floors.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(24.dp)
-                            ) {
-                                if (buildingType.isNotEmpty()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("TYPE", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(buildingType, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
+                        if (buildingType.isNotBlank()) BuildingInfoRow("Building Type", buildingType)
+                        if (constructionYear.isNotBlank()) BuildingInfoRow("Construction Year", constructionYear)
+                        if (renovationYear.isNotBlank()) BuildingInfoRow("Renovation Year", renovationYear)
+                        if (floors.isNotBlank()) BuildingInfoRow("Floors", floors)
+                        if (material.isNotBlank()) BuildingInfoRow("Material", material)
+                        if (foundation.isNotBlank()) BuildingInfoRow("Foundation", foundation)
+                        if (environment.isNotBlank()) BuildingInfoRow("Environment", environment)
+                        if (occupancy.isNotBlank()) BuildingInfoRow("Occupancy", occupancy)
 
-                                if (floors.isNotEmpty()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("FLOORS", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(floors, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        }
-
-                        if (material.isNotEmpty() || constructionYear.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(24.dp)
-                            ) {
-                                if (material.isNotEmpty()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("MATERIAL", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(material, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-
-                                if (constructionYear.isNotEmpty()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("BUILT", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(constructionYear, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        }
-
-                        if (renovationYear.isNotEmpty()) BuildingInfoRow("Last Renovation", renovationYear)
-                        if (foundation.isNotEmpty()) BuildingInfoRow("Foundation Type", foundation)
-                        if (environment.isNotEmpty()) BuildingInfoRow("Environment", environment)
-                        if (occupancy.isNotEmpty()) BuildingInfoRow("Occupancy Level", occupancy)
-                        if (previousIssues.isNotEmpty()) BuildingInfoRow("Previous Issues", previousIssues.joinToString(", "))
-                        if (environmentalRisks.isNotEmpty()) BuildingInfoRow("Environmental Risk", environmentalRisks.firstOrNull() ?: "None")
-
-                        if (notes.isNotEmpty()) {
-                            HorizontalDivider(color = Color(0xFFE0E0E0), modifier = Modifier.padding(vertical = 12.dp))
-                            Text("Additional Notes", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                        if (previousIssues.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(notes, fontSize = 13.sp, color = Color.Black, lineHeight = 20.sp)
+                            Text(
+                                text = "Previous Issues:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF374151)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            previousIssues.forEach { issue ->
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text("• ", fontSize = 13.sp, color = Color(0xFF6B7280))
+                                    Text(
+                                        text = issue,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF6B7280)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (environmentalRisks.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Environmental Risks:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF374151)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            environmentalRisks.forEach { risk ->
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text("• ", fontSize = 13.sp, color = Color(0xFF6B7280))
+                                    Text(
+                                        text = risk,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF6B7280)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (notes.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Notes:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF374151)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = notes,
+                                fontSize = 13.sp,
+                                color = Color(0xFF6B7280),
+                                lineHeight = 18.sp
+                            )
                         }
                     }
                 }
