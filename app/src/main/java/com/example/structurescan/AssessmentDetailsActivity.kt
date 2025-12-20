@@ -101,6 +101,11 @@ class AssessmentDetailsActivity : ComponentActivity() {
     private lateinit var currentEnvironmentalRisks: MutableState<ArrayList<String>>
     private lateinit var currentNotes: MutableState<String>
 
+    private lateinit var currentAddress: MutableState<String>
+    private lateinit var currentFootprintArea: MutableState<String>
+    private lateinit var currentTypeOfConstruction: MutableState<ArrayList<String>>
+
+
     private val editBuildingInfoLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -131,6 +136,11 @@ class AssessmentDetailsActivity : ComponentActivity() {
                             currentOccupancy.value = document.getString("occupancy") ?: ""
                             currentEnvironmentalRisks.value = ArrayList((document.get("environmentalRisks") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
                             currentNotes.value = document.getString("notes") ?: ""
+
+                            currentAddress.value = document.getString("address") ?: ""
+                            currentFootprintArea.value = document.getString("footprintArea") ?: ""
+                            currentTypeOfConstruction.value = ArrayList((document.get("typeOfConstruction") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
+
                         }
                     } catch (e: Exception) {
                         Toast.makeText(this@AssessmentDetailsActivity, "Error updating data", Toast.LENGTH_SHORT).show()
@@ -160,6 +170,10 @@ class AssessmentDetailsActivity : ComponentActivity() {
         val environmentalRisks: ArrayList<String>? = intent.getStringArrayListExtra("ENVIRONMENTAL_RISKS")
         val notes = intent.getStringExtra("NOTES") ?: ""
 
+        val address = intent.getStringExtra("ADDRESS") ?: ""
+        val footprintArea = intent.getStringExtra("FOOTPRINT_AREA") ?: ""
+        val typeOfConstruction: ArrayList<String>? = intent.getStringArrayListExtra("TYPE_OF_CONSTRUCTION")
+
         currentAssessmentName = mutableStateOf(title)
         currentBuildingType = mutableStateOf(buildingType)
         currentConstructionYear = mutableStateOf(constructionYear)
@@ -172,6 +186,11 @@ class AssessmentDetailsActivity : ComponentActivity() {
         currentOccupancy = mutableStateOf(occupancy)
         currentEnvironmentalRisks = mutableStateOf(environmentalRisks ?: arrayListOf())
         currentNotes = mutableStateOf(notes)
+
+        currentAddress = mutableStateOf(address)
+        currentFootprintArea = mutableStateOf(footprintArea)
+        currentTypeOfConstruction = mutableStateOf(typeOfConstruction ?: arrayListOf())
+
 
         lifecycleScope.launch {
             try {
@@ -196,6 +215,11 @@ class AssessmentDetailsActivity : ComponentActivity() {
                     currentOccupancy.value = document.getString("occupancy") ?: ""
                     currentEnvironmentalRisks.value = ArrayList((document.get("environmentalRisks") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
                     currentNotes.value = document.getString("notes") ?: ""
+
+                    currentAddress.value = document.getString("address") ?: ""
+                    currentFootprintArea.value = document.getString("footprintArea") ?: ""
+                    currentTypeOfConstruction.value = ArrayList((document.get("typeOfConstruction") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
+
                 }
             } catch (e: Exception) {
                 Log.e("AssessmentDetails", "Error fetching fresh data", e)
@@ -219,6 +243,9 @@ class AssessmentDetailsActivity : ComponentActivity() {
                     occupancy = currentOccupancy.value,
                     environmentalRisks = currentEnvironmentalRisks.value,
                     notes = currentNotes.value,
+                    address = currentAddress.value,
+                    footprintArea = currentFootprintArea.value,
+                    typeOfConstruction = currentTypeOfConstruction.value,
                     getRecommendation = ::getRecommendation,
                     onEditBuildingInfo = {
                         val intent = Intent(this@AssessmentDetailsActivity, EditBuildingInfoActivity::class.java).apply {
@@ -235,6 +262,10 @@ class AssessmentDetailsActivity : ComponentActivity() {
                             putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, currentEnvironmentalRisks.value)
                             putExtra(IntentKeys.NOTES, currentNotes.value)
                             putExtra("ASSESSMENT_ID", assessmentId)
+
+                            putExtra(IntentKeys.ADDRESS, currentAddress.value)
+                            putExtra(IntentKeys.FOOTPRINT_AREA, currentFootprintArea.value)
+                            putStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION, currentTypeOfConstruction.value)
                         }
                         editBuildingInfoLauncher.launch(intent)
                     }
@@ -353,6 +384,11 @@ fun AssessmentDetailsScreen(
     occupancy: String = "",
     environmentalRisks: List<String> = emptyList(),
     notes: String = "",
+
+    address: String = "",
+    footprintArea: String = "",
+    typeOfConstruction: List<String> = emptyList(),
+
     getRecommendation: (String, String) -> DamageRecommendation,
     onEditBuildingInfo: () -> Unit
 ) {
@@ -601,6 +637,11 @@ fun AssessmentDetailsScreen(
                 previousIssues = previousIssues,
                 environmentalRisks = environmentalRisks,
                 notes = notes,
+
+                address = address,
+                footprintArea = footprintArea,
+                typeOfConstruction = typeOfConstruction,
+
                 assessmentName = title,
                 onEditClick = onEditBuildingInfo,
                 initiallyExpanded = true

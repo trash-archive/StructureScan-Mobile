@@ -1,5 +1,4 @@
 package com.example.structurescan
-
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.lifecycleScope
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -116,6 +115,72 @@ class AssessmentResultsActivity : ComponentActivity() {
     private var currentAssessmentId: String? = null
     private var originalBuildingAreas: ArrayList<BuildingArea>? = null
 
+    // ✅ ADD REACTIVE STATE FOR BUILDING INFO
+    private val _assessmentName = mutableStateOf("")
+    private val _buildingType = mutableStateOf("")
+    private val _constructionYear = mutableStateOf("")
+    private val _renovationYear = mutableStateOf("")
+    private val _floors = mutableStateOf("")
+    private val _material = mutableStateOf("")
+    private val _foundation = mutableStateOf("")
+    private val _environment = mutableStateOf("")
+    private val _previousIssues = mutableStateOf<List<String>>(emptyList())
+    private val _occupancy = mutableStateOf("")
+    private val _environmentalRisks = mutableStateOf<List<String>>(emptyList())
+    private val _notes = mutableStateOf("")
+    // ✅ ADD THESE THREE NEW STATE VARIABLES:
+    private val _address = mutableStateOf("")
+    private val _footprintArea = mutableStateOf("")
+    private val _typeOfConstruction = mutableStateOf<List<String>>(emptyList())
+
+    // ✅ ADD THIS LAUNCHER
+    val editBuildingInfoLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val data = result.data!!
+            if (data.getBooleanExtra("UPDATED", false)) {
+                // ✅ UPDATE REACTIVE STATE (triggers UI recomposition automatically)
+                _assessmentName.value = data.getStringExtra("assessmentName") ?: ""
+                _buildingType.value = data.getStringExtra(IntentKeys.BUILDING_TYPE) ?: ""
+                _constructionYear.value = data.getStringExtra(IntentKeys.CONSTRUCTION_YEAR) ?: ""
+                _renovationYear.value = data.getStringExtra(IntentKeys.RENOVATION_YEAR) ?: ""
+                _floors.value = data.getStringExtra(IntentKeys.FLOORS) ?: ""
+                _material.value = data.getStringExtra(IntentKeys.MATERIAL) ?: ""
+                _foundation.value = data.getStringExtra(IntentKeys.FOUNDATION) ?: ""
+                _environment.value = data.getStringExtra(IntentKeys.ENVIRONMENT) ?: ""
+                _previousIssues.value = data.getStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES) ?: emptyList()
+                _occupancy.value = data.getStringExtra(IntentKeys.OCCUPANCY) ?: ""
+                _environmentalRisks.value = data.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS) ?: emptyList()
+                _notes.value = data.getStringExtra(IntentKeys.NOTES) ?: ""
+                // ✅ ADD THESE THREE:
+                _address.value = data.getStringExtra(IntentKeys.ADDRESS) ?: ""
+                _footprintArea.value = data.getStringExtra(IntentKeys.FOOTPRINT_AREA) ?: ""
+                _typeOfConstruction.value = data.getStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION) ?: emptyList()
+
+                // ✅ ALSO UPDATE INTENT (for Firebase saving later)
+                intent.putExtra("assessmentName", data.getStringExtra("assessmentName"))
+                intent.putExtra(IntentKeys.BUILDING_TYPE, data.getStringExtra(IntentKeys.BUILDING_TYPE))
+                intent.putExtra(IntentKeys.CONSTRUCTION_YEAR, data.getStringExtra(IntentKeys.CONSTRUCTION_YEAR))
+                intent.putExtra(IntentKeys.RENOVATION_YEAR, data.getStringExtra(IntentKeys.RENOVATION_YEAR))
+                intent.putExtra(IntentKeys.FLOORS, data.getStringExtra(IntentKeys.FLOORS))
+                intent.putExtra(IntentKeys.MATERIAL, data.getStringExtra(IntentKeys.MATERIAL))
+                intent.putExtra(IntentKeys.FOUNDATION, data.getStringExtra(IntentKeys.FOUNDATION))
+                intent.putExtra(IntentKeys.ENVIRONMENT, data.getStringExtra(IntentKeys.ENVIRONMENT))
+                intent.putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, data.getStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES))
+                intent.putExtra(IntentKeys.OCCUPANCY, data.getStringExtra(IntentKeys.OCCUPANCY))
+                intent.putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, data.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS))
+                intent.putExtra(IntentKeys.NOTES, data.getStringExtra(IntentKeys.NOTES))
+                // Also update intent
+                intent.putExtra(IntentKeys.ADDRESS, data.getStringExtra(IntentKeys.ADDRESS))
+                intent.putExtra(IntentKeys.FOOTPRINT_AREA, data.getStringExtra(IntentKeys.FOOTPRINT_AREA))
+                intent.putStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION, data.getStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION))
+
+                Toast.makeText(this, "Building information updated", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // NEW: Store if re-analysis has been used
     private val sharedPrefs by lazy {
         getSharedPreferences("assessment_prefs", Context.MODE_PRIVATE)
@@ -130,7 +195,7 @@ class AssessmentResultsActivity : ComponentActivity() {
 
         currentAssessmentId = intent.getStringExtra("ASSESSMENT_ID")
 
-        val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: "Unnamed Assessment"
+        _assessmentName.value = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: "Unnamed Assessment"
         val buildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
         } else {
@@ -140,17 +205,21 @@ class AssessmentResultsActivity : ComponentActivity() {
 
         originalBuildingAreas = buildingAreas
 
-        val buildingType = intent.getStringExtra(IntentKeys.BUILDING_TYPE) ?: ""
-        val constructionYear = intent.getStringExtra(IntentKeys.CONSTRUCTION_YEAR) ?: ""
-        val renovationYear = intent.getStringExtra(IntentKeys.RENOVATION_YEAR) ?: ""
-        val floors = intent.getStringExtra(IntentKeys.FLOORS) ?: ""
-        val material = intent.getStringExtra(IntentKeys.MATERIAL) ?: ""
-        val foundation = intent.getStringExtra(IntentKeys.FOUNDATION) ?: ""
-        val environment = intent.getStringExtra(IntentKeys.ENVIRONMENT) ?: ""
-        val previousIssues = intent.getStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES) ?: arrayListOf()
-        val occupancy = intent.getStringExtra(IntentKeys.OCCUPANCY) ?: ""
-        val environmentalRisks = intent.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS) ?: arrayListOf()
-        val notes = intent.getStringExtra(IntentKeys.NOTES) ?: ""
+        _buildingType.value = intent.getStringExtra(IntentKeys.BUILDING_TYPE) ?: ""
+        _constructionYear.value = intent.getStringExtra(IntentKeys.CONSTRUCTION_YEAR) ?: ""
+        _renovationYear.value = intent.getStringExtra(IntentKeys.RENOVATION_YEAR) ?: ""
+        _floors.value = intent.getStringExtra(IntentKeys.FLOORS) ?: ""
+        _material.value = intent.getStringExtra(IntentKeys.MATERIAL) ?: ""
+        _foundation.value = intent.getStringExtra(IntentKeys.FOUNDATION) ?: ""
+        _environment.value = intent.getStringExtra(IntentKeys.ENVIRONMENT) ?: ""
+        _previousIssues.value = intent.getStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES) ?: arrayListOf()
+        _occupancy.value = intent.getStringExtra(IntentKeys.OCCUPANCY) ?: ""
+        _environmentalRisks.value = intent.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS) ?: arrayListOf()
+        _notes.value = intent.getStringExtra(IntentKeys.NOTES) ?: ""
+        // ✅ ADD THESE THREE:
+        _address.value = intent.getStringExtra(IntentKeys.ADDRESS) ?: ""
+        _footprintArea.value = intent.getStringExtra(IntentKeys.FOOTPRINT_AREA) ?: ""
+        _typeOfConstruction.value = intent.getStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION) ?: arrayListOf()
 
         // NEW: Check if this assessment has used re-analysis
         val hasUsedReanalysis = currentAssessmentId?.let {
@@ -159,60 +228,68 @@ class AssessmentResultsActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
+                // ✅ PASS STATE VALUES INSTEAD OF INTENT VALUES
                 AssessmentResultsScreen(
                     buildingAreas = buildingAreas,
-                    assessmentName = assessmentName,
-                    buildingType = buildingType,
-                    constructionYear = constructionYear,
-                    renovationYear = renovationYear,
-                    floors = floors,
-                    material = material,
-                    foundation = foundation,
-                    environment = environment,
-                    previousIssues = previousIssues,
-                    occupancy = occupancy,
-                    environmentalRisks = environmentalRisks,
-                    notes = notes,
-                    assessmentId = currentAssessmentId, // NEW: Pass assessment ID
-                    initialHasReanalyzed = hasUsedReanalysis, // NEW: Pass re-analysis state
+                    assessmentName = _assessmentName.value, // ✅ Use state
+                    buildingType = _buildingType.value,     // ✅ Use state
+                    constructionYear = _constructionYear.value,
+                    renovationYear = _renovationYear.value,
+                    floors = _floors.value,
+                    material = _material.value,
+                    foundation = _foundation.value,
+                    environment = _environment.value,
+                    previousIssues = _previousIssues.value,
+                    occupancy = _occupancy.value,
+                    environmentalRisks = _environmentalRisks.value,
+                    notes = _notes.value,
+                    // ✅ ADD THESE THREE:
+                    address = _address.value,
+                    footprintArea = _footprintArea.value,
+                    typeOfConstruction = _typeOfConstruction.value,
+                    assessmentId = currentAssessmentId,
+                    initialHasReanalyzed = hasUsedReanalysis,
                     onSaveToFirebase = { summary, isReanalysis ->
                         saveAssessmentToFirebase(
-                            assessmentName, summary, buildingType, constructionYear,
-                            renovationYear, floors, material, foundation, environment,
-                            previousIssues, occupancy, environmentalRisks, notes, isReanalysis
+                            _assessmentName.value, summary, _buildingType.value,
+                            _constructionYear.value, _renovationYear.value, _floors.value,
+                            _material.value, _foundation.value, _environment.value,
+                            _previousIssues.value, _occupancy.value,
+                            _environmentalRisks.value, _notes.value,
+                            _address.value,           // ✅ ADD
+                            _footprintArea.value,     // ✅ ADD
+                            _typeOfConstruction.value, // ✅ ADD
+                            isReanalysis
                         )
                     },
-                    onMarkReanalyzed = { // NEW: Callback to save re-analysis state
+                    onMarkReanalyzed = {
                         currentAssessmentId?.let { id ->
                             sharedPrefs.edit().putBoolean("reanalyzed_$id", true).apply()
                         }
+                    },
+                    onEditBuildingInfo = {
+                        val intent = Intent(this, EditBuildingInfoActivity::class.java).apply {
+                            putExtra("assessmentName", _assessmentName.value)
+                            putExtra(IntentKeys.BUILDING_TYPE, _buildingType.value)
+                            putExtra(IntentKeys.CONSTRUCTION_YEAR, _constructionYear.value)
+                            putExtra(IntentKeys.RENOVATION_YEAR, _renovationYear.value)
+                            putExtra(IntentKeys.FLOORS, _floors.value)
+                            putExtra(IntentKeys.MATERIAL, _material.value)
+                            putExtra(IntentKeys.FOUNDATION, _foundation.value)
+                            putExtra(IntentKeys.ENVIRONMENT, _environment.value)
+                            putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, ArrayList(_previousIssues.value))
+                            putExtra(IntentKeys.OCCUPANCY, _occupancy.value)
+                            putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, ArrayList(_environmentalRisks.value))
+                            putExtra(IntentKeys.NOTES, _notes.value)
+                            // ✅ ADD THESE THREE:
+                            putExtra(IntentKeys.ADDRESS, _address.value)
+                            putExtra(IntentKeys.FOOTPRINT_AREA, _footprintArea.value)
+                            putStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION, ArrayList(_typeOfConstruction.value))
+                            putExtra("ASSESSMENT_ID", currentAssessmentId)
+                        }
+                        editBuildingInfoLauncher.launch(intent)
                     }
                 )
-            }
-        }
-    }
-
-    // FIXED: onActivityResult now only updates state variables, doesn't recreate
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
-            val wasUpdated = data.getBooleanExtra("UPDATED", false)
-            if (wasUpdated) {
-                // Simply update the intent extras so if the user rotates screen,
-                // the updated data persists
-                intent.putExtra("assessmentName", data.getStringExtra("assessmentName"))
-                intent.putExtra(IntentKeys.BUILDING_TYPE, data.getStringExtra(IntentKeys.BUILDING_TYPE))
-                intent.putExtra(IntentKeys.CONSTRUCTION_YEAR, data.getStringExtra(IntentKeys.CONSTRUCTION_YEAR))
-                intent.putExtra(IntentKeys.RENOVATION_YEAR, data.getStringExtra(IntentKeys.RENOVATION_YEAR))
-                intent.putExtra(IntentKeys.FLOORS, data.getStringExtra(IntentKeys.FLOORS))
-                intent.putExtra(IntentKeys.MATERIAL, data.getStringExtra(IntentKeys.MATERIAL))
-                intent.putExtra(IntentKeys.FOUNDATION, data.getStringExtra(IntentKeys.FOUNDATION))
-                intent.putExtra(IntentKeys.ENVIRONMENT, data.getStringExtra(IntentKeys.ENVIRONMENT))
-                intent.putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, data.getStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES))
-                intent.putExtra(IntentKeys.OCCUPANCY, data.getStringExtra(IntentKeys.OCCUPANCY))
-                intent.putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, data.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS))
-                intent.putExtra(IntentKeys.NOTES, data.getStringExtra(IntentKeys.NOTES))
             }
         }
     }
@@ -259,6 +336,9 @@ class AssessmentResultsActivity : ComponentActivity() {
         occupancy: String,
         environmentalRisks: List<String>,
         notes: String,
+        address: String,                      // ✅ ADD
+        footprintArea: String,                // ✅ ADD
+        typeOfConstruction: List<String>,
         isReanalysis: Boolean = false  // ✅ Use this parameter instead of intent
     ): Boolean {
         val currentUser = firebaseAuth.currentUser
@@ -424,7 +504,11 @@ class AssessmentResultsActivity : ComponentActivity() {
                 "previousIssues" to previousIssues,
                 "occupancy" to occupancy,
                 "environmentalRisks" to environmentalRisks,
-                "notes" to notes
+                "notes" to notes,
+                // ✅ ADD THESE THREE:
+                "address" to address,
+                "footprintArea" to footprintArea,
+                "typeOfConstruction" to typeOfConstruction
             )
 
             // Save to Firestore
@@ -596,28 +680,35 @@ fun AssessmentResultsScreen(
     occupancy: String = "",
     environmentalRisks: List<String> = emptyList(),
     notes: String = "",
+
+    // ✅ ADD THESE THREE:
+    address: String = "",
+    footprintArea: String = "",
+    typeOfConstruction: List<String> = emptyList(),
+
     assessmentId: String? = null, // NEW: Receive assessment ID
     initialHasReanalyzed: Boolean = false, // NEW: Receive re-analysis state
     onSaveToFirebase: (AssessmentSummary, Boolean) -> Boolean = { _, _ -> false },
     onReanalyze: () -> Unit = {},
-    onMarkReanalyzed: () -> Unit = {} // NEW: Callback to mark re-analysis used
+    onMarkReanalyzed: () -> Unit = {}, // NEW: Callback to mark re-analysis used
+    onEditBuildingInfo: () -> Unit = {} // ✅ ADD THIS PARAMETER
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val activity = context as? AssessmentResultsActivity
 
-    var currentBuildingType by remember { mutableStateOf(buildingType) }
-    var currentConstructionYear by remember { mutableStateOf(constructionYear) }
-    var currentRenovationYear by remember { mutableStateOf(renovationYear) }
-    var currentFloors by remember { mutableStateOf(floors) }
-    var currentMaterial by remember { mutableStateOf(material) }
-    var currentFoundation by remember { mutableStateOf(foundation) }
-    var currentEnvironment by remember { mutableStateOf(environment) }
-    var currentPreviousIssues by remember { mutableStateOf(previousIssues) }
-    var currentOccupancy by remember { mutableStateOf(occupancy) }
-    var currentEnvironmentalRisks by remember { mutableStateOf(environmentalRisks) }
-    var currentNotes by remember { mutableStateOf(notes) }
-    var currentAssessmentName by remember { mutableStateOf(assessmentName) }
+    //var currentBuildingType by remember { mutableStateOf(buildingType) }
+    //var currentConstructionYear by remember { mutableStateOf(constructionYear) }
+   // var currentRenovationYear by remember { mutableStateOf(renovationYear) }
+    //var currentFloors by remember { mutableStateOf(floors) }
+   // var currentMaterial by remember { mutableStateOf(material) }
+   // var currentFoundation by remember { mutableStateOf(foundation) }
+   // var currentEnvironment by remember { mutableStateOf(environment) }
+   // var currentPreviousIssues by remember { mutableStateOf(previousIssues) }
+    //var currentOccupancy by remember { mutableStateOf(occupancy) }
+    //var currentEnvironmentalRisks by remember { mutableStateOf(environmentalRisks) }
+    //var currentNotes by remember { mutableStateOf(notes) }
+    //var currentAssessmentName by remember { mutableStateOf(assessmentName) }
 
     var isAnalyzing by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
@@ -632,39 +723,20 @@ fun AssessmentResultsScreen(
     val SHOW_THRESHOLD = 0.50f
 
     // NEW: Update building info when intent changes
-    LaunchedEffect(buildingType, constructionYear, renovationYear, floors, material, foundation, environment, previousIssues, occupancy, environmentalRisks, notes, assessmentName) {
-        currentBuildingType = buildingType
-        currentConstructionYear = constructionYear
-        currentRenovationYear = renovationYear
-        currentFloors = floors
-        currentMaterial = material
-        currentFoundation = foundation
-        currentEnvironment = environment
-        currentPreviousIssues = previousIssues
-        currentOccupancy = occupancy
-        currentEnvironmentalRisks = environmentalRisks
-        currentNotes = notes
-        currentAssessmentName = assessmentName
-    }
-
-    fun launchEditBuildingInfo() {
-        val intent = Intent(context, EditBuildingInfoActivity::class.java).apply {
-            putExtra("assessmentName", currentAssessmentName)
-            putExtra(IntentKeys.BUILDING_TYPE, currentBuildingType)
-            putExtra(IntentKeys.CONSTRUCTION_YEAR, currentConstructionYear)
-            putExtra(IntentKeys.RENOVATION_YEAR, currentRenovationYear)
-            putExtra(IntentKeys.FLOORS, currentFloors)
-            putExtra(IntentKeys.MATERIAL, currentMaterial)
-            putExtra(IntentKeys.FOUNDATION, currentFoundation)
-            putExtra(IntentKeys.ENVIRONMENT, currentEnvironment)
-            putStringArrayListExtra(IntentKeys.PREVIOUS_ISSUES, ArrayList(currentPreviousIssues))
-            putExtra(IntentKeys.OCCUPANCY, currentOccupancy)
-            putStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS, ArrayList(currentEnvironmentalRisks))
-            putExtra(IntentKeys.NOTES, currentNotes)
-            putExtra("ASSESSMENT_ID", assessmentId) // NEW: Pass assessment ID
-        }
-        (context as? ComponentActivity)?.startActivityForResult(intent, 100)
-    }
+    //LaunchedEffect(buildingType, constructionYear, renovationYear, floors, material, foundation, environment, previousIssues, occupancy, environmentalRisks, notes, assessmentName) {
+       // currentBuildingType = buildingType
+       // currentConstructionYear = constructionYear
+        //currentRenovationYear = renovationYear
+       // currentFloors = floors
+       // currentMaterial = material
+       // currentFoundation = foundation
+       // currentEnvironment = environment
+       // currentPreviousIssues = previousIssues
+        //currentOccupancy = occupancy
+        //currentEnvironmentalRisks = environmentalRisks
+      //  currentNotes = notes
+       // currentAssessmentName = assessmentName
+  //  }
 
     BackHandler(enabled = true) {
         if (isSaving || isReanalyzing) {
@@ -1279,7 +1351,7 @@ fun AssessmentResultsScreen(
             ) {
                 // Assessment Name
                 Text(
-                    text = currentAssessmentName,
+                    text =  assessmentName,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -1356,19 +1428,25 @@ fun AssessmentResultsScreen(
 
                 // Building Information Card
                 BuildingInformationCard(
-                    buildingType = currentBuildingType,
-                    constructionYear = currentConstructionYear,
-                    renovationYear = currentRenovationYear,
-                    floors = currentFloors,
-                    material = currentMaterial,
-                    foundation = currentFoundation,
-                    environment = currentEnvironment,
-                    occupancy = currentOccupancy,
-                    previousIssues = currentPreviousIssues,
-                    environmentalRisks = currentEnvironmentalRisks,
-                    notes = currentNotes,
-                    assessmentName = currentAssessmentName,
-                    onEditClick = { launchEditBuildingInfo() },
+                    buildingType = buildingType,
+                    constructionYear = constructionYear,
+                    renovationYear = renovationYear,
+                    floors = floors,
+                    material = material,
+                    foundation = foundation,
+                    environment = environment,
+                    occupancy = occupancy,
+                    previousIssues = previousIssues,
+                    environmentalRisks = environmentalRisks,
+                    notes = notes,
+
+                    // ✅ ADD THESE THREE:
+                    address = address,
+                    footprintArea = footprintArea,
+                    typeOfConstruction = typeOfConstruction,
+
+                    assessmentName =  assessmentName,
+                    onEditClick = { onEditBuildingInfo() },
                     initiallyExpanded = true
                 )
 
@@ -2730,6 +2808,10 @@ fun BuildingInformationCard(
     previousIssues: List<String>,
     environmentalRisks: List<String>,
     notes: String,
+    // ✅ ADD THESE THREE PARAMETERS:
+    address: String,
+    footprintArea: String,
+    typeOfConstruction: List<String>,
     assessmentName: String,
     onEditClick: () -> Unit,
     initiallyExpanded: Boolean = false
@@ -2810,8 +2892,8 @@ fun BuildingInformationCard(
                     // ✅ Check if any field has data
                     val hasData = listOf(
                         buildingType, constructionYear, renovationYear,
-                        floors, material, foundation, environment, occupancy, notes
-                    ).any { it.isNotBlank() } || previousIssues.isNotEmpty() || environmentalRisks.isNotEmpty()
+                        floors, material, foundation, environment, occupancy, notes, address, footprintArea
+                    ).any { it.isNotBlank() } || previousIssues.isNotEmpty() || environmentalRisks.isNotEmpty() || typeOfConstruction.isNotEmpty()
 
                     if (!hasData) {
                         // ✅ UPDATED: Removed icon, adjusted description
@@ -2829,6 +2911,10 @@ fun BuildingInformationCard(
                             )
                         }
                     } else {
+                        // ✅ ADD THESE DISPLAY ROWS (put them before buildingType):
+                        if (address.isNotBlank()) BuildingInfoRow("Address", address)
+                        if (footprintArea.isNotBlank()) BuildingInfoRow("Footprint Area", "$footprintArea sq ft")
+
                         if (buildingType.isNotBlank()) BuildingInfoRow("Building Type", buildingType)
                         if (constructionYear.isNotBlank()) BuildingInfoRow("Construction Year", constructionYear)
                         if (renovationYear.isNotBlank()) BuildingInfoRow("Renovation Year", renovationYear)
@@ -2879,6 +2965,31 @@ fun BuildingInformationCard(
                                     Text("• ", fontSize = 13.sp, color = Color(0xFF6B7280))
                                     Text(
                                         text = risk,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF6B7280)
+                                    )
+                                }
+                            }
+                        }
+
+                        // ✅ ADD THIS AFTER FLOORS (before material):
+                        if (typeOfConstruction.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Type of Construction:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF374151)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            typeOfConstruction.forEach { type ->
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text("• ", fontSize = 13.sp, color = Color(0xFF6B7280))
+                                    Text(
+                                        text = type,
                                         fontSize = 13.sp,
                                         color = Color(0xFF6B7280)
                                     )

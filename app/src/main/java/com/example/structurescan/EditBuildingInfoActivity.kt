@@ -1,5 +1,4 @@
 package com.example.structurescan
-
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -63,6 +62,11 @@ class EditBuildingInfoActivity : ComponentActivity() {
         val environmentalRisks = intent.getStringArrayListExtra(IntentKeys.ENVIRONMENTAL_RISKS) ?: arrayListOf()
         val notes = intent.getStringExtra(IntentKeys.NOTES) ?: ""
 
+        // ✅ ADD THESE THREE NEW FIELDS:
+        val address = intent.getStringExtra(IntentKeys.ADDRESS) ?: ""
+        val footprintArea = intent.getStringExtra(IntentKeys.FOOTPRINT_AREA) ?: ""
+        val typeOfConstruction = intent.getStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION) ?: arrayListOf()
+
         setContent {
             MaterialTheme {
                 EditBuildingInfoScreen(
@@ -78,6 +82,12 @@ class EditBuildingInfoActivity : ComponentActivity() {
                     initialOccupancy = occupancy,
                     initialEnvironmentalRisks = environmentalRisks,
                     initialNotes = notes,
+
+                    // ✅ ADD THESE THREE:
+                    initialAddress = address,
+                    initialFootprintArea = footprintArea,
+                    initialTypeOfConstruction = typeOfConstruction,
+
                     onBack = { finish() },
                     onUpdateAnalysis = { updatedData, onSuccess, onFailure ->
                         updateBuildingInfoInFirebase(updatedData, assessmentName, onSuccess, onFailure)
@@ -160,6 +170,14 @@ class EditBuildingInfoActivity : ComponentActivity() {
                             ArrayList(updatedData["environmentalRisks"] as? List<String> ?: emptyList())
                         )
                         putExtra(IntentKeys.NOTES, updatedData["notes"] as? String ?: "")
+
+                        // ✅ ADD THESE THREE:
+                        putExtra(IntentKeys.ADDRESS, updatedData["address"] as? String ?: "")
+                        putExtra(IntentKeys.FOOTPRINT_AREA, updatedData["footprintArea"] as? String ?: "")
+                        putStringArrayListExtra(
+                            IntentKeys.TYPE_OF_CONSTRUCTION,
+                            ArrayList(updatedData["typeOfConstruction"] as? List<String> ?: emptyList())
+                        )
                     }
                     setResult(RESULT_OK, resultIntent)
                     onSuccess()
@@ -255,6 +273,12 @@ fun EditBuildingInfoScreen(
     initialOccupancy: String = "",
     initialEnvironmentalRisks: List<String> = emptyList(),
     initialNotes: String = "",
+
+    // ✅ ADD THESE THREE:
+    initialAddress: String = "",
+    initialFootprintArea: String = "",
+    initialTypeOfConstruction: List<String> = emptyList(),
+
     onBack: () -> Unit,
     onUpdateAnalysis: (Map<String, Any>, onSuccess: () -> Unit, onFailure: (String) -> Unit) -> Unit,
     onDeleteAssessment: () -> Unit
@@ -271,6 +295,11 @@ fun EditBuildingInfoScreen(
     var foundation by remember { mutableStateOf(initialFoundation) }
     var environment by remember { mutableStateOf(initialEnvironment) }
     var notes by remember { mutableStateOf(initialNotes) }
+
+    // ✅ ADD THESE THREE:
+    var address by remember { mutableStateOf(initialAddress) }
+    var footprintArea by remember { mutableStateOf(initialFootprintArea) }
+    val constructionTypes = remember { mutableStateListOf(*initialTypeOfConstruction.toTypedArray()) }
 
     // Dialog state
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -676,6 +705,27 @@ fun EditBuildingInfoScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ✅ ADD ADDRESS FIELD (before Building Type):
+            CleanInputField(
+                label = "Address",
+                placeholder = "e.g., 123 Main St, City",
+                value = address,
+                onValueChange = { address = it }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ✅ ADD FOOTPRINT AREA (before Building Type):
+            CleanInputField(
+                label = "Footprint Area (sq ft)",
+                placeholder = "e.g., 2500",
+                value = footprintArea,
+                keyboardType = KeyboardType.Number,
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() || char == '.' }) footprintArea = it
+                }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Building Type
             CleanDropdownField(
                 label = "Building Type",
@@ -735,6 +785,48 @@ fun EditBuildingInfoScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // ✅ ADD TYPE OF CONSTRUCTION (after Number of Floors, before Material):
+            Text(
+                "Type of Construction (ATC-20)",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                "Select all that apply",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280),
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            val atcConstructionOptions = listOf(
+                "Wood frame", "Steel frame", "Tilt-up concrete", "Concrete frame",
+                "Concrete shear wall", "Unreinforced masonry", "Reinforced masonry", "Other"
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                atcConstructionOptions.forEach { type ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = type in constructionTypes,
+                            onCheckedChange = {
+                                if (it) constructionTypes.add(type) else constructionTypes.remove(type)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF2196F3),
+                                uncheckedColor = Color(0xFF9CA3AF)
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(type, fontSize = 14.sp, color = Color.Black)
+                    }
+                }
+            }
 
             // Main Structural Material
             CleanDropdownField(
@@ -989,7 +1081,11 @@ fun EditBuildingInfoScreen(
                         "previousIssues" to selectedIssues.toList(),
                         "occupancy" to selectedOccupancy,
                         "environmentalRisks" to selectedRisks.toList(),
-                        "notes" to notes
+                        "notes" to notes,
+                        // ✅ ADD THESE THREE:
+                        "address" to address,
+                        "footprintArea" to footprintArea,
+                        "typeOfConstruction" to constructionTypes.toList()
                     )
 
                     onUpdateAnalysis(

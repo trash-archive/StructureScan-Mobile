@@ -1,4 +1,5 @@
 package com.example.structurescan
+
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -31,7 +32,6 @@ class BuildingInfoActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Retrieve data from intent
         val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: ""
         val buildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
@@ -43,23 +43,20 @@ class BuildingInfoActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 BuildingInfoScreen(
-                    onBack = {
-                        finish()
-                    },
+                    onBack = { finish() },
                     onSubmit = { buildingInfo ->
-                        // Pass all data to AssessmentResultsActivity
-                        val intent = Intent(this, AssessmentResultsActivity::class.java).apply {
+                        val intent = Intent(this@BuildingInfoActivity, AssessmentResultsActivity::class.java).apply {
                             putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
-                            putParcelableArrayListExtra(
-                                IntentKeys.BUILDING_AREAS,
-                                ArrayList(buildingAreas)
-                            )
+                            putParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, ArrayList(buildingAreas))
 
                             // Building info
                             putExtra(IntentKeys.BUILDING_TYPE, buildingInfo.buildingType)
+                            putExtra(IntentKeys.ADDRESS, buildingInfo.address)
+                            putExtra(IntentKeys.FOOTPRINT_AREA, buildingInfo.footprintArea)
                             putExtra(IntentKeys.CONSTRUCTION_YEAR, buildingInfo.constructionYear)
                             putExtra(IntentKeys.RENOVATION_YEAR, buildingInfo.renovationYear)
                             putExtra(IntentKeys.FLOORS, buildingInfo.floors)
+                            putStringArrayListExtra(IntentKeys.TYPE_OF_CONSTRUCTION, ArrayList(buildingInfo.typeOfConstruction))
                             putExtra(IntentKeys.MATERIAL, buildingInfo.material)
                             putExtra(IntentKeys.FOUNDATION, buildingInfo.foundation)
                             putExtra(IntentKeys.ENVIRONMENT, buildingInfo.environment)
@@ -77,12 +74,14 @@ class BuildingInfoActivity : ComponentActivity() {
     }
 }
 
-// Data class to hold building information
 data class BuildingInfo(
     val buildingType: String,
+    val address: String,
+    val footprintArea: String,
     val constructionYear: String,
     val renovationYear: String,
     val floors: String,
+    val typeOfConstruction: List<String>,
     val material: String,
     val foundation: String,
     val environment: String,
@@ -97,8 +96,10 @@ data class BuildingInfo(
 fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
     val context = LocalContext.current
 
-    // --- State variables ---
+    // State variables
     var buildingType by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var footprintArea by remember { mutableStateOf("") }
     var constructionYear by remember { mutableStateOf("") }
     var renovationYear by remember { mutableStateOf("") }
     var floors by remember { mutableStateOf("") }
@@ -107,17 +108,18 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
     var environment by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
-    // Issues checkboxes
     val selectedIssues = remember { mutableStateListOf<String>() }
+    val constructionTypes = remember { mutableStateListOf<String>() }
+    val selectedRisks = remember { mutableStateListOf<String>() }
 
-    // Occupancy (radio) - NO DEFAULT
     val occupancyOptions = listOf("Low", "Average", "High")
     var selectedOccupancy by remember { mutableStateOf("") }
 
-    // Environmental risks checkboxes
-    val selectedRisks = remember { mutableStateListOf<String>() }
+    val atcConstructionOptions = listOf(
+        "Wood frame", "Steel frame", "Tilt-up concrete", "Concrete frame",
+        "Concrete shear wall", "Unreinforced masonry", "Reinforced masonry", "Other"
+    )
 
-    // --- Clean input field composable ---
     @Composable
     fun CleanInputField(
         label: String,
@@ -137,13 +139,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
-                placeholder = {
-                    Text(
-                        placeholder,
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 16.sp
-                    )
-                },
+                placeholder = { Text(placeholder, color = Color(0xFF9CA3AF), fontSize = 16.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -158,7 +154,6 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
         }
     }
 
-    // --- Clean dropdown field composable ---
     @Composable
     fun CleanDropdownField(
         label: String,
@@ -185,13 +180,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                     value = selected,
                     onValueChange = {},
                     readOnly = true,
-                    placeholder = {
-                        Text(
-                            placeholder,
-                            color = Color(0xFF9CA3AF),
-                            fontSize = 16.sp
-                        )
-                    },
+                    placeholder = { Text(placeholder, color = Color(0xFF9CA3AF), fontSize = 16.sp) },
                     trailingIcon = {
                         Icon(
                             Icons.Default.KeyboardArrowDown,
@@ -206,9 +195,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                         focusedBorderColor = Color(0xFF2196F3)
                     ),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
                     singleLine = true
                 )
                 ExposedDropdownMenu(
@@ -230,7 +217,6 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
         }
     }
 
-    // --- Main Layout ---
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -246,7 +232,6 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                     .fillMaxWidth()
                     .padding(vertical = 12.dp)
             ) {
-                // Back button (left aligned)
                 Row(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -262,8 +247,6 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                         )
                     }
                 }
-
-                // Centered Title
                 Text(
                     text = "Building Information",
                     modifier = Modifier.align(Alignment.Center),
@@ -276,13 +259,13 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Scrollable content
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
+            // Info Box
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -292,25 +275,16 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                     )
                     .padding(16.dp)
             ) {
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
-
                     Box(
                         modifier = Modifier
                             .size(28.dp)
                             .background(Color(0xFF2196F3), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            "i",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("i", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
-
                     Spacer(modifier = Modifier.width(12.dp))
-
                     Column {
                         Text(
                             "Optional Building Details",
@@ -319,7 +293,7 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                             color = Color(0xFF4A86E8)
                         )
                         Text(
-                            "This information helps with documentation",
+                            "This information helps with ATC-20 documentation",
                             fontSize = 14.sp,
                             color = Color(0xFF6B7280)
                         )
@@ -329,6 +303,27 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Address (NEW)
+            CleanInputField(
+                label = "Address",
+                placeholder = "e.g., 123 Main St, City",
+                value = address,
+                onValueChange = { address = it }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Footprint Area (NEW)
+            CleanInputField(
+                label = "Footprint Area (sq ft)",
+                placeholder = "e.g., 2500",
+                value = footprintArea,
+                keyboardType = KeyboardType.Number,
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() || it == "." }) footprintArea = it
+                }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Building Type
             CleanDropdownField(
                 label = "Building Type",
@@ -336,10 +331,9 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 options = listOf("Residential", "Commercial", "Industrial", "Mixed-use"),
                 selected = buildingType
             ) { buildingType = it }
-
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Two-column layout for Construction Year and Last Renovation
+            // Construction Year & Renovation (Two-column)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -371,7 +365,6 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
 
             // Number of Floors
@@ -386,25 +379,52 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                     }
                 }
             )
-
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Type of Construction (NEW - ATC-20 checkboxes)
+            Text(
+                "Type of Construction (ATC-20)",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                "Select all that apply",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280),
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                atcConstructionOptions.forEach { type ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Checkbox(
+                            checked = type in constructionTypes,
+                            onCheckedChange = {
+                                if (it) constructionTypes.add(type) else constructionTypes.remove(type)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF2196F3),
+                                uncheckedColor = Color(0xFF9CA3AF)
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(type, fontSize = 14.sp, color = Color.Black)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Main Structural Material
             CleanDropdownField(
                 label = "Main Structural Material",
                 placeholder = "e.g., Concrete, Wood, Steel",
                 options = listOf(
-                    "Reinforced Concrete",
-                    "Wood",
-                    "Steel",
-                    "Composite Material",
-                    "Brick",
-                    "Masonry",
-                    "Stone"
+                    "Reinforced Concrete", "Wood", "Steel", "Composite Material",
+                    "Brick", "Masonry", "Stone"
                 ),
                 selected = material
             ) { material = it }
-
             Spacer(modifier = Modifier.height(24.dp))
 
             // Foundation Type
@@ -412,16 +432,11 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 label = "Foundation Type",
                 placeholder = "e.g., Slab-on-grade",
                 options = listOf(
-                    "Spread Footing",
-                    "Slab-on-grade",
-                    "Crawl space",
-                    "Basement",
-                    "Pile foundation",
-                    "Mat foundation"
+                    "Spread Footing", "Slab-on-grade", "Crawl space",
+                    "Basement", "Pile foundation", "Mat foundation"
                 ),
                 selected = foundation
             ) { foundation = it }
-
             Spacer(modifier = Modifier.height(24.dp))
 
             // Environment Type
@@ -431,208 +446,99 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 options = listOf("Urban", "Suburban", "Rural", "Coastal", "Mountainous"),
                 selected = environment
             ) { environment = it }
-
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Previous Issues or Repairs
-            Text(
-                "Previous Issues or Repairs",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                "Select any issues noticed before",
-                fontSize = 14.sp,
-                color = Color(0xFF6B7280),
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Issues checkboxes
+            // Previous Issues
+            Text("Previous Issues or Repairs", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+            Text("Select any issues noticed before", fontSize = 14.sp, color = Color(0xFF6B7280))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(
-                    "Wall cracks",
-                    "Foundation settling",
-                    "Water damage",
-                    "Recent repairs"
-                ).forEach { issue ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                listOf("Wall cracks", "Foundation settling", "Water damage", "Recent repairs").forEach { issue ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Checkbox(
                             checked = issue in selectedIssues,
-                            onCheckedChange = {
-                                if (it) selectedIssues.add(issue) else selectedIssues.remove(issue)
-                            },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = Color(0xFF2196F3),
-                                uncheckedColor = Color(0xFF9CA3AF)
-                            )
+                            onCheckedChange = { if (it) selectedIssues.add(issue) else selectedIssues.remove(issue) },
+                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2196F3), uncheckedColor = Color(0xFF9CA3AF))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            issue,
-                            fontSize = 14.sp,
-                            color = Color.Black
-                        )
+                        Text(issue, fontSize = 14.sp, color = Color.Black)
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
 
             // Building Usage
-            Text(
-                "Building Usage",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                "Select occupancy level",
-                fontSize = 14.sp,
-                color = Color(0xFF6B7280),
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Occupancy radio buttons
+            Text("Building Usage", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+            Text("Select occupancy level", fontSize = 14.sp, color = Color(0xFF6B7280))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 occupancyOptions.forEach { level ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         RadioButton(
                             selected = selectedOccupancy == level,
                             onClick = { selectedOccupancy = level },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = Color(0xFF2196F3),
-                                unselectedColor = Color(0xFF9CA3AF)
-                            )
+                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3), unselectedColor = Color(0xFF9CA3AF))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            level,
-                            fontSize = 14.sp,
-                            color = Color.Black
-                        )
+                        Text(level, fontSize = 14.sp, color = Color.Black)
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
 
             // Environmental Exposure
-            Text(
-                "Environmental Exposure",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                "Select any known natural disaster risks",
-                fontSize = 14.sp,
-                color = Color(0xFF6B7280),
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Environmental risks checkboxes
+            Text("Environmental Exposure", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+            Text("Select any known natural disaster risks", fontSize = 14.sp, color = Color(0xFF6B7280))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(
-                    "Earthquake-prone Area",
-                    "High Winds",
-                    "Flood Zone",
-                    "Landslide Risk",
-                    "Coastal Erosion"
-                ).forEach { risk ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Checkbox(
-                            checked = risk in selectedRisks,
-                            onCheckedChange = {
-                                if (it) selectedRisks.add(risk) else selectedRisks.remove(risk)
-                            },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = Color(0xFF2196F3),
-                                uncheckedColor = Color(0xFF9CA3AF)
+                listOf("Earthquake-prone Area", "High Winds", "Flood Zone", "Landslide Risk", "Coastal Erosion")
+                    .forEach { risk ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Checkbox(
+                                checked = risk in selectedRisks,
+                                onCheckedChange = { if (it) selectedRisks.add(risk) else selectedRisks.remove(risk) },
+                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2196F3), uncheckedColor = Color(0xFF9CA3AF))
                             )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            risk,
-                            fontSize = 14.sp,
-                            color = Color.Black
-                        )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(risk, fontSize = 14.sp, color = Color.Black)
+                        }
                     }
-                }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Additional Notes
-            Text(
-                "Additional Notes",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            // Notes
+            Text("Additional Notes", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                placeholder = {
-                    Text(
-                        "e.g., Recent water leaks in basement, visible foundation cracks...",
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 16.sp
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
+                placeholder = { Text("e.g., Recent water leaks...", color = Color(0xFF9CA3AF), fontSize = 16.sp) },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
                 maxLines = 5,
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedBorderColor = Color(0xFFE5E7EB),
-                    focusedBorderColor = Color(0xFF2196F3),
-                    unfocusedTextColor = Color.Black,
-                    focusedTextColor = Color.Black
+                    focusedBorderColor = Color(0xFF2196F3)
                 )
             )
-
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Continue Button with VALIDATION
+            // Continue Button
             Button(
                 onClick = {
-                    // Validate renovation year is not earlier than construction year
                     if (constructionYear.isNotEmpty() && renovationYear.isNotEmpty()) {
                         val constructionYearInt = constructionYear.toIntOrNull()
                         val renovationYearInt = renovationYear.toIntOrNull()
-
-                        if (constructionYearInt != null && renovationYearInt != null) {
-                            if (renovationYearInt < constructionYearInt) {
-                                Toast.makeText(
-                                    context,
-                                    "Last renovation year cannot be earlier than construction year",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                return@Button
-                            }
+                        if (constructionYearInt != null && renovationYearInt != null && renovationYearInt < constructionYearInt) {
+                            Toast.makeText(context, "Renovation year cannot be earlier than construction year", Toast.LENGTH_LONG).show()
+                            return@Button
                         }
                     }
 
                     val buildingInfo = BuildingInfo(
                         buildingType = buildingType,
+                        address = address,
+                        footprintArea = footprintArea,
                         constructionYear = constructionYear,
                         renovationYear = renovationYear,
                         floors = floors,
+                        typeOfConstruction = constructionTypes.toList(),
                         material = material,
                         foundation = foundation,
                         environment = environment,
@@ -648,23 +554,16 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                Text(
-                    "Continue",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
+                Text("Continue", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(
                 text = "All fields are optional • You can skip this",
                 fontSize = 14.sp,
                 color = Color(0xFF9CA3AF),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
-
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
