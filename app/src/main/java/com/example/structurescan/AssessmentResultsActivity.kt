@@ -277,50 +277,61 @@ class AssessmentResultsActivity : ComponentActivity() {
 
             val areasData = mutableListOf<HashMap<String, Any>>()
 
-            // Use runBlocking with proper Dispatchers.IO context
             kotlinx.coroutines.runBlocking(Dispatchers.IO) {
                 summary.areaAnalyses.forEach { areaAnalysis ->
                     val imagesData = mutableListOf<HashMap<String, Any>>()
 
                     areaAnalysis.imageAssessments.forEachIndexed { index, assessment ->
-                        val firebaseImageUrl = if (isActualReanalysis && assessment.firebaseImageUrl.isNotEmpty()) {
-                            assessment.firebaseImageUrl
-                        } else {
-                            uploadImageToStorage(
-                                assessment.imageUri,
-                                userId,
-                                assessmentId,
-                                areaAnalysis.areaId,
-                                index
-                            ) ?: throw Exception("Failed to upload image ${index + 1}")
-                        }
+                        val firebaseImageUrl =
+                            if (isActualReanalysis && assessment.firebaseImageUrl.isNotEmpty()) {
+                                assessment.firebaseImageUrl
+                            } else {
+                                uploadImageToStorage(
+                                    assessment.imageUri,
+                                    userId,
+                                    assessmentId,
+                                    areaAnalysis.areaId,
+                                    index
+                                ) ?: throw Exception("Failed to upload image index $index")
+                            }
 
-                        val recommendationsForImage = if (assessment.detectedIssues.isEmpty()) {
-                            listOf(
-                                hashMapOf(
-                                    "title" to "Clean Surface",
-                                    "description" to "No structural damage or surface deterioration detected.",
-                                    "severity" to "GOOD",
-                                    "actions" to listOf(
-                                        "Continue regular maintenance schedule",
-                                        "Monitor during routine inspections",
-                                        "No immediate action required"
+                        // Group issues by type-level for this image
+                        val issueGroups = assessment.detectedIssues.groupBy { "${it.damageType}-${it.damageLevel}" }
+
+                        val recommendationsForImage =
+                            if (assessment.detectedIssues.isEmpty()) {
+                                listOf(
+                                    hashMapOf(
+                                        "title" to "Clean Surface",
+                                        "description" to "No structural damage or surface deterioration detected.",
+                                        "severity" to "GOOD",
+                                        "actions" to listOf(
+                                            "Continue regular maintenance schedule",
+                                            "Monitor during routine inspections",
+                                            "No immediate action required"
+                                        ),
+                                        // Extra metadata expected by AssessmentDetailsActivity
+                                        "imageCount" to 1,
+                                        "avgConfidence" to 0f
                                     )
                                 )
-                            )
-                        } else {
-                            assessment.detectedIssues.map { issue ->
-                                val rec = getRecommendation(issue.damageType, issue.damageLevel)
-                                hashMapOf(
-                                    "title" to rec.title,
-                                    "description" to rec.description,
-                                    "severity" to rec.severity,
-                                    "actions" to rec.actions
-                                )
+                            } else {
+                                issueGroups.map { (_, issues) ->
+                                    val firstIssue = issues.first()
+                                    val rec = getRecommendation(firstIssue.damageType, firstIssue.damageLevel)
+                                    hashMapOf(
+                                        "title" to rec.title,
+                                        "description" to rec.description,
+                                        "severity" to rec.severity,
+                                        "actions" to rec.actions,
+                                        // Number of images and average confidence for this issue group
+                                        "imageCount" to issues.size,
+                                        "avgConfidence" to issues.map { it.confidence }.average().toFloat()
+                                    )
+                                }
                             }
-                        }
 
-                        val imageData = hashMapOf(
+                        val imageData = hashMapOf<String, Any>(
                             "damageType" to assessment.damageType,
                             "damageLevel" to assessment.damageLevel,
                             "confidence" to assessment.confidence,
@@ -337,6 +348,19 @@ class AssessmentResultsActivity : ComponentActivity() {
                             "recommendations" to recommendationsForImage
                         )
 
+                        // Optional plain surface confidence (if you have a "Plain" class)
+                        imageData["plainConf"] = assessment.detectedIssues
+                            .firstOrNull { it.damageType == "Plain" }?.confidence ?: 0f
+
+                        // Pull image-level metadata (locationName, etc.) from original building areas
+                        val originalArea = originalBuildingAreas?.find { it.id == areaAnalysis.areaId }
+                        val photoMeta = originalArea?.photoMetadata?.getOrNull(index)
+
+                        if (!photoMeta?.locationName.isNullOrBlank()) {
+                            imageData["locationName"] = photoMeta!!.locationName
+                        }
+
+                        // Structural tilt metadata
                         assessment.structuralTilt?.let { tilt ->
                             imageData["structuralVerticalTilt"] = tilt.averageVerticalTilt
                             imageData["structuralHorizontalTilt"] = tilt.averageHorizontalTilt
@@ -349,16 +373,26 @@ class AssessmentResultsActivity : ComponentActivity() {
                         imagesData.add(imageData)
                     }
 
-                    areasData.add(
-                        hashMapOf(
-                            "areaId" to areaAnalysis.areaId,
-                            "areaName" to areaAnalysis.areaName,
-                            "areaType" to areaAnalysis.areaType.name,
-                            "areaRisk" to areaAnalysis.areaRisk,
-                            "structuralAnalysisEnabled" to areaAnalysis.structuralAnalysisEnabled,
-                            "images" to imagesData
-                        )
+                    // Area-level metadata
+                    val originalArea = originalBuildingAreas?.find { it.id == areaAnalysis.areaId }
+
+                    val areaMap = hashMapOf<String, Any>(
+                        "areaId" to areaAnalysis.areaId,
+                        "areaName" to areaAnalysis.areaName,
+                        "areaType" to areaAnalysis.areaType.name,
+                        "areaRisk" to areaAnalysis.areaRisk,
+                        "structuralAnalysisEnabled" to areaAnalysis.structuralAnalysisEnabled,
+                        "images" to imagesData
                     )
+
+                    // Add extra area metadata if your BuildingArea has these fields
+                    originalArea?.let { oa ->
+                        if (!oa.description.isNullOrBlank()) {
+                            areaMap["areaDescription"] = oa.description
+                        }
+                    }
+
+                    areasData.add(areaMap)
                 }
             }
 
@@ -1543,108 +1577,141 @@ fun AssessmentResultsScreen(
                 summary.areaAnalyses.forEach { areaAnalysis ->
                     var areaExpanded by remember { mutableStateOf(true) }
 
+                    // Determine risk colors
+                    val areaRiskColor = when {
+                        areaAnalysis.areaRisk.contains("High") -> Color(0xFFD32F2F)
+                        areaAnalysis.areaRisk.contains("Moderate") -> Color(0xFFF57C00)
+                        else -> Color(0xFF388E3C)
+                    }
+
+                    val areaHeaderBackgroundColor = when {
+                        areaAnalysis.areaRisk.contains("High") -> Color(0xFFFFEBEE)
+                        areaAnalysis.areaRisk.contains("Moderate") -> Color(0xFFFFF3E0)
+                        else -> Color(0xFFE8F5E9)
+                    }
+
+                    // Determine area icon
+                    val areaIcon = when {
+                        areaAnalysis.areaType.name.contains("FOUNDATION") -> Icons.Default.Foundation
+                        areaAnalysis.areaType.name.contains("WALL") -> Icons.Default.CropSquare
+                        areaAnalysis.areaType.name.contains("COLUMN") -> Icons.Default.ViewColumn
+                        areaAnalysis.areaType.name.contains("ROOF") -> Icons.Default.Roofing
+                        else -> Icons.Default.Home
+                    }
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(2.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E5E5))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, areaRiskColor.copy(alpha = 0.3f))
                     ) {
                         Column {
-                            // Header
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = when (areaAnalysis.areaRisk) {
-                                    "High Risk" -> Color(0xFFFFEBEE)
-                                    "Moderate Risk" -> Color(0xFFFFF3E0)
-                                    else -> Color(0xFFF0FDF4)
-                                },
-                                shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+                            // ===== IMPROVED HEADER SECTION =====
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(areaHeaderBackgroundColor)
+                                    .clickable { areaExpanded = !areaExpanded }
+                                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { areaExpanded = !areaExpanded }
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                // Icon on top-left (smaller, cleaner)
+                                Surface(
+                                    modifier = Modifier.size(36.dp),
+                                    shape = CircleShape,
+                                    color = Color.White,
+                                    tonalElevation = 2.dp
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier.size(40.dp),
-                                            shape = CircleShape,
-                                            color = Color.White.copy(alpha = 0.7f)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Home,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF8B5CF6),
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Column {
-                                            Text(
-                                                text = areaAnalysis.areaName,
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color(0xFF333333)
-                                            )
-                                            Text(
-                                                text = "${areaAnalysis.imageAssessments.size} photo${if (areaAnalysis.imageAssessments.size != 1) "s" else ""} analyzed",
-                                                fontSize = 12.sp,
-                                                color = Color(0xFF666666)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = when (areaAnalysis.areaRisk) {
-                                                "High Risk" -> Color(0xFFDC2626).copy(alpha = 0.15f)
-                                                "Moderate Risk" -> Color(0xFFF59E0B).copy(alpha = 0.15f)
-                                                else -> Color(0xFF16A34A).copy(alpha = 0.15f)
-                                            }
-                                        ) {
-                                            Text(
-                                                text = areaAnalysis.areaRisk,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = when (areaAnalysis.areaRisk) {
-                                                    "High Risk" -> Color(0xFFDC2626)
-                                                    "Moderate Risk" -> Color(0xFFF59E0B)
-                                                    else -> Color(0xFF059669)
-                                                },
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                            )
-                                        }
-
-                                        val rotation by animateFloatAsState(
-                                            targetValue = if (areaExpanded) 0f else -90f,
-                                            label = "toggle"
-                                        )
+                                    Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = Icons.Default.KeyboardArrowDown,
-                                            contentDescription = if (areaExpanded) "Collapse" else "Expand",
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .rotate(rotation),
-                                            tint = Color(0xFF666666)
+                                            imageVector = areaIcon,
+                                            contentDescription = null,
+                                            tint = areaRiskColor,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
+                                }
+
+                                // Text content takes remaining space
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // Area Name (bold, prominent)
+                                    Text(
+                                        text = areaAnalysis.areaName,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.Black,
+                                        lineHeight = 22.sp,
+                                        maxLines = 1
+                                    )
+
+                                    // Description (if exists) - wraps fully
+                                    val area = buildingAreas.find { it.id == areaAnalysis.areaId }
+                                    if (!area?.description.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = area!!.description,
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF64748B),
+                                            lineHeight = 19.sp,
+                                            maxLines = 2
+                                        )
+                                    }
+
+                                    // Photo count (subtle)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhotoCamera,
+                                            contentDescription = null,
+                                            tint = Color(0xFF9CA3AF),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = if (areaAnalysis.imageAssessments.size == 1)
+                                                "1 photo analyzed"
+                                            else
+                                                "${areaAnalysis.imageAssessments.size} photos analyzed",
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF9CA3AF),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                // Right side: Risk badge + expand icon (compact)
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = areaRiskColor.copy(alpha = 0.12f),
+                                        tonalElevation = 1.dp
+                                    ) {
+                                        Text(
+                                            text = areaAnalysis.areaRisk,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = areaRiskColor,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = if (areaExpanded)
+                                            Icons.Default.ExpandLess
+                                        else
+                                            Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
 
