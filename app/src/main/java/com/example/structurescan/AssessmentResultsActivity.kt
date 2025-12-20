@@ -74,7 +74,10 @@ data class ImageAssessment(
     val firebaseImageUrl: String = "",
     val detectedIssues: List<DetectedIssue> = emptyList(),
     val imageRisk: String = "Low",
-    val structuralTilt: StructuralTiltAnalyzer.StructuralTiltResult? = null
+    val structuralTilt: StructuralTiltAnalyzer.StructuralTiltResult? = null,
+    val riskPoints: Float = 0f,        // NEW
+    val tiltPoints: Float = 0f,        // NEW
+    val finalRiskPoints: Float = 0f    // NEW
 )
 
 data class AreaAnalysis(
@@ -425,7 +428,10 @@ class AssessmentResultsActivity : ComponentActivity() {
                                 )
                             },
                             "imageRisk" to assessment.imageRisk,
-                            "recommendations" to recommendationsForImage
+                            "recommendations" to recommendationsForImage,
+                            "riskPoints" to assessment.riskPoints,
+                            "tiltPoints" to assessment.tiltPoints,
+                            "finalRiskPoints" to assessment.finalRiskPoints,
                         )
 
                         // Optional plain surface confidence (if you have a "Plain" class)
@@ -462,6 +468,7 @@ class AssessmentResultsActivity : ComponentActivity() {
                         "areaType" to areaAnalysis.areaType.name,
                         "areaRisk" to areaAnalysis.areaRisk,
                         "structuralAnalysisEnabled" to areaAnalysis.structuralAnalysisEnabled,
+                        "avgRiskPoints" to areaAnalysis.imageAssessments.map { it.finalRiskPoints }.average(),
                         "images" to imagesData
                     )
 
@@ -749,6 +756,25 @@ fun AssessmentResultsScreen(
         }
     }
 
+    // ✅ STEP 2: ADD THESE TWO FUNCTIONS HERE
+    fun getDamagePoints(detectedIssues: List<DetectedIssue>): Float {
+        var points = 0f
+        detectedIssues.forEach { issue ->
+            when ("${issue.damageType}-${issue.damageLevel}") {
+                "Spalling-High", "Major Crack-High" -> points += 3f
+                "Algae-Moderate" -> points += 2f
+                "Minor Crack-Low", "Paint Damage-Low" -> points += 1f
+            }
+        }
+        return points
+    }
+
+    fun getTiltPoints(tilt: StructuralTiltAnalyzer.StructuralTiltResult?): Float {
+        return tilt?.let {
+            StructuralTiltAnalyzer().getRiskPoints(it)  // ✅ Uses new analyzer method
+        } ?: 0f
+    }
+
     // FIXED: Simplified analyzeImageWithTensorFlow - returns assessment without Firebase URL
     fun analyzeImageWithTensorFlow(
         imageUri: Uri,
@@ -786,6 +812,7 @@ fun AssessmentResultsScreen(
             }
 
             val model = ModelUnquant.newInstance(context)
+
             val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 224, 224, 3), DataType.FLOAT32)
             inputFeature0.loadBuffer(byteBuffer)
 
@@ -812,12 +839,16 @@ fun AssessmentResultsScreen(
             }
 
             val detectedIssuesMutable = mutableListOf<DetectedIssue>()
+
             if (crackHigh >= SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Spalling", "High", crackHigh))
             if (crackMod >= SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Major Crack", "High", crackMod))
             if (crackLow >= SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Minor Crack", "Low", crackLow))
             if (paintConf >= SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Paint Damage", "Low", paintConf))
             if (algaeConf >= SHOW_THRESHOLD) detectedIssuesMutable.add(DetectedIssue("Algae", "Moderate", algaeConf))
-
+            val detectedIssues = detectedIssuesMutable.toList()  // ✅ 1. CREATE detectedIssues
+            val damagePoints = getDamagePoints(detectedIssues)
+            val tiltPoints = getTiltPoints(structuralTilt)
+            val finalPoints = maxOf(damagePoints, tiltPoints)
             val imageRisk = when {
                 detectedIssuesMutable.any { it.damageType == "Spalling" && it.damageLevel == "High" } -> "High"
                 detectedIssuesMutable.any { it.damageType == "Major Crack" && it.damageLevel == "High" } -> "High"
@@ -826,6 +857,12 @@ fun AssessmentResultsScreen(
                 detectedIssuesMutable.isNotEmpty() -> "Low"
                 plainConf >= SHOW_THRESHOLD -> "None"
                 else -> "Low"
+            }
+
+            val imageRiskString = when {
+                finalPoints >= 2f -> "SEVERE"
+                finalPoints >= 1f -> "MODERATE"
+                else -> "MINOR"
             }
 
             model.close()
@@ -840,8 +877,11 @@ fun AssessmentResultsScreen(
                 confidence = maxConfidence,
                 firebaseImageUrl = "", // Empty initially
                 detectedIssues = detectedIssuesMutable.toList(),
-                imageRisk = imageRisk,
-                structuralTilt = structuralTilt
+                imageRisk = imageRiskString,  // ✅ NEW - uses scoring system
+                structuralTilt = structuralTilt,
+                riskPoints = damagePoints,
+                tiltPoints = tiltPoints,
+                finalRiskPoints = finalPoints
             )
         } catch (e: Exception) {
             Log.e("ImageAnalysis", "Analysis failed", e)
@@ -881,12 +921,18 @@ fun AssessmentResultsScreen(
                     )
                 }.filterNotNull()
 
+                val imageCount = imageAssessments.size
+                val avgPoints = if (imageCount >= 3) {
+                    imageAssessments.map { it.finalRiskPoints }.average().toFloat()
+                } else 0f
+
                 val areaRisk = when {
-                    imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
-                    imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
-                    imageAssessments.any { it.imageRisk == "Low" } -> "Low Risk"
-                    else -> "Low Risk"
+                    imageCount < 3 -> "INSUFFICIENT"
+                    avgPoints >= 2.0f -> "SEVERE"
+                    avgPoints >= 1.0f -> "MODERATE"
+                    else -> "MINOR"
                 }
+
 
                 areaAnalysesList.add(
                     AreaAnalysis(
@@ -990,12 +1036,18 @@ fun AssessmentResultsScreen(
                         )
                     }.filterNotNull()
 
+                    val imageCount = imageAssessments.size
+                    val avgPoints = if (imageCount >= 3) {
+                        imageAssessments.map { it.finalRiskPoints }.average().toFloat()
+                    } else 0f
+
                     val areaRisk = when {
-                        imageAssessments.any { it.imageRisk == "High" } -> "High Risk"
-                        imageAssessments.any { it.imageRisk == "Moderate" } -> "Moderate Risk"
-                        imageAssessments.any { it.imageRisk == "Low" } -> "Low Risk"
-                        else -> "Low Risk"
+                        imageCount < 3 -> "INSUFFICIENT"
+                        avgPoints >= 2.0f -> "SEVERE"
+                        avgPoints >= 1.0f -> "MODERATE"
+                        else -> "MINOR"
                     }
+
 
                     areaAnalysesList.add(
                         AreaAnalysis(
@@ -1027,12 +1079,15 @@ fun AssessmentResultsScreen(
                     )
                 }.sortedByDescending { it.count }
 
+                val severeCount = areaAnalysesList.count { it.areaRisk == "SEVERE" }
+                val moderateCount = areaAnalysesList.count { it.areaRisk == "MODERATE" }
+
                 val overallRisk = when {
-                    areaAnalysesList.any { it.areaRisk == "High Risk" } -> "High Risk"
-                    areaAnalysesList.any { it.areaRisk == "Moderate Risk" } -> "Moderate Risk"
-                    areaAnalysesList.any { it.areaRisk == "Low Risk" } -> "Low Risk"
-                    else -> "Low Risk"
+                    areaAnalysesList.any { it.areaRisk == "SEVERE" } -> "UNSAFE"
+                    moderateCount >= 2 -> "RESTRICTED"
+                    else -> "INSPECTED"
                 }
+
 
                 val totalIssues = detectionSummary.sumOf { it.count }
 
@@ -1656,15 +1711,19 @@ fun AssessmentResultsScreen(
                     var areaExpanded by remember { mutableStateOf(true) }
 
                     // Determine risk colors
-                    val areaRiskColor = when {
-                        areaAnalysis.areaRisk.contains("High") -> Color(0xFFD32F2F)
-                        areaAnalysis.areaRisk.contains("Moderate") -> Color(0xFFF57C00)
-                        else -> Color(0xFF388E3C)
+                    val areaRiskColor = when (areaAnalysis.areaRisk) {
+                        "SEVERE" -> Color(0xFFD32F2F)      // Red
+                        "MODERATE" -> Color(0xFFF57C00)    // Orange
+                        "MINOR" -> Color(0xFFFFB300)       // Yellow
+                        "INSUFFICIENT" -> Color.Gray
+                        else -> Color(0xFF388E3C)          // Green
                     }
 
-                    val areaHeaderBackgroundColor = when {
-                        areaAnalysis.areaRisk.contains("High") -> Color(0xFFFFEBEE)
-                        areaAnalysis.areaRisk.contains("Moderate") -> Color(0xFFFFF3E0)
+                    val areaHeaderBackgroundColor = when (areaAnalysis.areaRisk) {
+                        "SEVERE" -> Color(0xFFFFEBEE)
+                        "MODERATE" -> Color(0xFFFFF3E0)
+                        "MINOR" -> Color(0xFFF0FDF4)
+                        "INSUFFICIENT" -> Color(0xFFF5F5F5)
                         else -> Color(0xFFE8F5E9)
                     }
 
@@ -1945,7 +2004,8 @@ fun AssessmentResultsScreen(
                                                                 )
                                                                 Spacer(Modifier.width(4.dp))
                                                                 Text(
-                                                                    "Tilt: ${structural.tiltSeverity.name} ${structural.averageVerticalTilt.toInt()}°",
+                                                                    "${structural.tiltSeverity.name} (${"%.1f".format(structural.averageVerticalTilt)}°)" +
+                                                                            if (structural.cameraTiltCompensation != null) " 📱+camera corr." else "",
                                                                     fontSize = 12.sp,
                                                                     color = when (structural.tiltSeverity) {
                                                                         StructuralTiltAnalyzer.TiltSeverity.SEVERE -> Color(0xFFEF4444)
