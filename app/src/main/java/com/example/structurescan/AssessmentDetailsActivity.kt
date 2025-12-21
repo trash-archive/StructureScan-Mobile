@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import com.example.structurescan.Utils.ImageDetail     // ✅ ADD THIS
+import com.example.structurescan.Utils.AreaSummary     // ✅ ADD THIS
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -1208,6 +1210,13 @@ fun AssessmentDetailsScreen(
                         coroutineScope.launch {
                             try {
                                 val imageUrls = allImages.map { it.imageUrl }
+                                val imageDetails = allImages.mapIndexed { index, image ->
+                                    ImageDetail(
+                                        imageUrl = image.imageUrl,
+                                        imageName = "Image_${index + 1}",
+                                        areaName = "Assessment Image"
+                                    )
+                                }
 
                                 val pdfData = PdfAssessmentData(
                                     assessmentName = title,
@@ -1238,7 +1247,11 @@ fun AssessmentDetailsScreen(
                                     occupancy = occupancy,
                                     environmentalRisks = environmentalRisks.joinToString(", "),
                                     notes = notes,
-                                    imageUrls = imageUrls
+                                    address = address,                    // ✅ ADD
+                                    footprintArea = footprintArea,        // ✅ ADD
+                                    typeOfConstruction = typeOfConstruction.joinToString(", "),  // ✅ ADD
+                                    areasData = emptyList(),              // ✅ TEMP - or build from areaData
+                                    imageDetails = imageDetails           // ✅ CORRECT PARAMETER!
                                 )
 
                                 val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)

@@ -8,6 +8,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import com.example.structurescan.Utils.AreaSummary
+import com.example.structurescan.Utils.ImageDetail
+import com.example.structurescan.Utils.PdfReportGenerator
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
+import com.example.structurescan.Utils.PdfAssessmentData
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
@@ -117,6 +121,7 @@ class AssessmentResultsActivity : ComponentActivity() {
     private lateinit var storage: FirebaseStorage
     private var currentAssessmentId: String? = null
     private var originalBuildingAreas: ArrayList<BuildingArea>? = null
+    private var assessmentSummary: AssessmentSummary? = null
 
     // ✅ ADD REACTIVE STATE FOR BUILDING INFO
     private val _assessmentName = mutableStateOf("")
@@ -571,6 +576,136 @@ class AssessmentResultsActivity : ComponentActivity() {
             false
         }
     }
+
+    // ✅ COMPLETE FIXED FUNCTION - PASTE THIS ENTIRE BLOCK
+    // ✅ COMPLETE FIXED FUNCTION - COPY PASTE THIS ENTIRE BLOCK
+    suspend fun generatePdfWithAllData(): PdfAssessmentData? {
+        // ✅ FIXED: Fallback if no summary available
+        val summary = assessmentSummary ?: run {
+            Log.w("PDF", "No assessment summary - using fallback data")
+            return PdfAssessmentData(
+                assessmentName = _assessmentName.value,
+                date = java.text.SimpleDateFormat("MMMM dd, yyyy", java.util.Locale.getDefault()).format(java.util.Date()),
+                overallRisk = "INSPECTED",
+                totalIssues = 0,
+                crackHighCount = 0,
+                crackModerateCount = 0,
+                crackLowCount = 0,
+                paintCount = 0,
+                algaeCount = 0,
+                buildingType = _buildingType.value,
+                constructionYear = _constructionYear.value,
+                renovationYear = _renovationYear.value,
+                floors = _floors.value,
+                material = _material.value,
+                foundation = _foundation.value,
+                environment = _environment.value,
+                previousIssues = _previousIssues.value.joinToString(", "),
+                occupancy = _occupancy.value,
+                environmentalRisks = _environmentalRisks.value.joinToString(", "),
+                notes = _notes.value,
+                address = _address.value,
+                footprintArea = _footprintArea.value,
+                typeOfConstruction = _typeOfConstruction.value.joinToString(", "),
+                areasData = emptyList(),
+                imageDetails = emptyList()
+            )
+        }
+
+        // Count damage types
+        var crackHighCount = 0
+        var crackModerateCount = 0
+        var crackLowCount = 0
+        var paintCount = 0
+        var algaeCount = 0
+
+        summary.areaAnalyses.forEach { areaAnalysis ->
+            areaAnalysis.imageAssessments.forEach { imageAssessment ->
+                imageAssessment.detectedIssues.forEach { detectedIssue ->
+                    val damageType = detectedIssue.damageType.lowercase()
+                    val damageLevel = detectedIssue.damageLevel
+
+                    when {
+                        damageType.contains("spalling") -> crackHighCount++
+                        damageType.contains("crack") && damageLevel == "High" -> crackHighCount++
+                        damageType.contains("crack") && damageLevel == "Moderate" -> crackModerateCount++
+                        damageType.contains("crack") && damageLevel == "Low" -> crackLowCount++
+                        damageType.contains("paint") -> paintCount++
+                        damageType.contains("algae") -> algaeCount++
+                    }
+                }
+            }
+        }
+
+        // Create AreaSummary list
+        val areasData = summary.areaAnalyses.map { areaAnalysis ->
+            val maxTilt = areaAnalysis.imageAssessments
+                .mapNotNull { it.structuralTilt?.averageVerticalTilt }
+                .maxOrNull()
+
+            val maxTiltSeverity = areaAnalysis.imageAssessments
+                .mapNotNull { it.structuralTilt?.tiltSeverity?.name }
+                .maxByOrNull { it ?: "" }
+
+            val allIssues = areaAnalysis.imageAssessments.flatMap { it.detectedIssues }
+                .map { "${it.damageType} (${it.damageLevel})" }
+                .distinct()
+
+            AreaSummary(
+                areaName = areaAnalysis.areaName,
+                areaRisk = areaAnalysis.areaRisk,
+                avgRiskPoints = areaAnalysis.imageAssessments.map { it.finalRiskPoints }.average().toFloat(),
+                imageCount = areaAnalysis.imageAssessments.size,
+                structuralAnalysisEnabled = areaAnalysis.structuralAnalysisEnabled,
+                detectedIssues = allIssues,
+                maxTiltAngle = maxTilt?.toDouble(),
+                maxTiltSeverity = maxTiltSeverity
+            )
+        }
+
+        // Create ImageDetail list
+        val imageDetails = summary.areaAnalyses.flatMap { areaAnalysis ->
+            areaAnalysis.imageAssessments.mapIndexed { index, imageAssessment ->
+                ImageDetail(
+                    imageUrl = imageAssessment.imageUri.toString(),
+                    imageName = "Image_${index + 1}",
+                    areaName = areaAnalysis.areaName
+                )
+            }
+        }
+
+        // ✅ RETURN COMPLETE PDF DATA
+        return PdfAssessmentData(
+            assessmentName = _assessmentName.value,
+            date = java.text.SimpleDateFormat("MMMM dd, yyyy", java.util.Locale.getDefault()).format(java.util.Date()),
+            overallRisk = summary.overallRisk,
+            totalIssues = summary.totalIssues,
+            crackHighCount = crackHighCount,
+            crackModerateCount = crackModerateCount,
+            crackLowCount = crackLowCount,
+            paintCount = paintCount,
+            algaeCount = algaeCount,
+            buildingType = _buildingType.value,
+            constructionYear = _constructionYear.value,
+            renovationYear = _renovationYear.value,
+            floors = _floors.value,
+            material = _material.value,
+            foundation = _foundation.value,
+            environment = _environment.value,
+            previousIssues = _previousIssues.value.joinToString(", "),
+            occupancy = _occupancy.value,
+            environmentalRisks = _environmentalRisks.value.joinToString(", "),
+            notes = _notes.value,
+            address = _address.value,
+            footprintArea = _footprintArea.value,
+            typeOfConstruction = _typeOfConstruction.value.joinToString(", "),
+            areasData = areasData,
+            imageDetails = imageDetails
+        )
+    }
+
+
+
 
     // Add this function in AssessmentResultsActivity
     suspend fun getReanalysisCount(assessmentId: String): Int {
@@ -1027,7 +1162,12 @@ fun AssessmentResultsScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (buildingAreas.isNotEmpty() && !isSavedToFirebase && assessmentId == null) {            isAnalyzing = true
+        // ✅ ADD THIS CHECK FIRST
+        if (assessmentSummary != null || assessmentId != null) {
+            isSavedToFirebase = true  // Skip analysis if already done
+            return@LaunchedEffect
+        }
+        if (buildingAreas.isNotEmpty() && !isSavedToFirebase) {
             // Only analyze if this is a NEW assessment (no ID yet)
             isAnalyzing = true
             isSaving = true
@@ -2225,7 +2365,31 @@ fun AssessmentResultsScreen(
                         // Download Button
                         Button(
                             onClick = {
-                                Toast.makeText(context, "Download feature coming soon", Toast.LENGTH_SHORT).show()
+                                coroutineScope.launch {
+                                    // ✅ PASTE THIS ENTIRE onClick:
+                                    try {
+                                        if (assessmentSummary == null) {
+                                            Toast.makeText(context, "❌ Wait for analysis to finish first!\n(See green checkmarks)", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
+
+                                        val activity = context as? AssessmentResultsActivity
+                                        val pdfData = activity?.generatePdfWithAllData()
+
+                                        if (pdfData != null) {
+                                            val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
+                                            if (pdfPath != null) {
+                                                Toast.makeText(context, "PDF saved to Downloads!", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                Toast.makeText(context, "Failed to generate PDF", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "Complete analysis first", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
