@@ -58,7 +58,8 @@ data class SavedAssessment(
     val previousIssues: List<String> = emptyList(),
     val occupancy: String = "",
     val environmentalRisks: List<String> = emptyList(),
-    val notes: String = ""
+    val notes: String = "",
+    val areasCount: Int = 0  // ✅ ADD THIS LINE
 )
 
 class HistoryActivity : ComponentActivity() {
@@ -171,7 +172,8 @@ fun HistoryScreen(
                             previousIssues = previousIssuesStrings,
                             occupancy = doc.getString("occupancy") ?: "",
                             environmentalRisks = environmentalRisksStrings,
-                            notes = doc.getString("notes") ?: ""
+                            notes = doc.getString("notes") ?: "",
+                            areasCount = (doc.get("areas") as? List<*>)?.size ?: 0  // ✅ ADD THIS
                         )
                     } catch (e: Exception) {
                         Log.e("HistoryActivity", "Error parsing document: ${e.message}")
@@ -614,6 +616,15 @@ fun HistoryCard(
 ) {
     val context = LocalContext.current
 
+    // ✅ EXACT COLORS FROM ASSESSMENT RESULTS
+    val properRiskColor = when (riskLevel) {
+        "High Risk", "UNSAFE" -> Color(0xFFD32F2F)      // RED
+        "Moderate Risk", "RESTRICTED" -> Color(0xFFF57C00) // ORANGE
+        "Low Risk", "INSPECTED" -> Color(0xFF388E3C)    // GREEN
+        "GOOD" -> Color(0xFF2E7D32)                     // DARK GREEN
+        else -> Color.Gray
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -637,7 +648,6 @@ fun HistoryCard(
                             putExtra("ALGAE_HIGH", assessment.algaeHighCount)
                             putExtra("ALGAE_MODERATE", assessment.algaeModerateCount)
                             putExtra("ALGAE_LOW", assessment.algaeLowCount)
-
                             putExtra("BUILDING_TYPE", assessment.buildingType)
                             putExtra("CONSTRUCTION_YEAR", assessment.constructionYear)
                             putExtra("RENOVATION_YEAR", assessment.renovationYear)
@@ -653,9 +663,7 @@ fun HistoryCard(
                         context.startActivity(intent)
                     }
                 },
-                onLongClick = {
-                    onLongPress()
-                }
+                onLongClick = { onLongPress() }
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) Color(0xFFE3F2FD) else Color.White
@@ -681,9 +689,7 @@ fun HistoryCard(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     fontSize = 16.sp,
@@ -699,6 +705,7 @@ fun HistoryCard(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
+                // ✅ RISK DOT + LABEL (PROPER COLORS)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -706,22 +713,47 @@ fun HistoryCard(
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(riskColor, CircleShape)
+                            .background(properRiskColor, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = riskLevel,
                         fontSize = 14.sp,
-                        color = riskColor,
+                        color = properRiskColor,
                         fontWeight = FontWeight.Medium
                     )
                 }
 
-                Text(
-                    text = "$issuesCount issues detected",
-                    fontSize = 13.sp,
-                    color = Color.Gray
-                )
+                // ✅ ISSUES + AREAS COUNT
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF0F9FF)
+                    ) {
+                        Text(
+                            text = "${issuesCount} issues",
+                            fontSize = 12.sp,
+                            color = Color(0xFF0EA5E9),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    // ✅ TOTAL AREAS ANALYZED
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF0FFF4)
+                    ) {
+                        Text(
+                            text = "${assessment.areasCount} areas",  // ✅ USE areasCount
+                            fontSize = 12.sp,
+                            color = Color(0xFF059669),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
             if (!isSelectionMode) {
@@ -735,6 +767,7 @@ fun HistoryCard(
         }
     }
 }
+
 
 @Composable
 fun BottomNavigationBarHistory(currentScreen: String) {

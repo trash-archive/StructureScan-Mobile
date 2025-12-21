@@ -55,6 +55,9 @@ data class DetailImageAssessment(
     val damageLevel: String = "Low",
     val confidence: Float = 0f,
     val plainConf: Float = 0f,
+    val riskPoints: Float = 0f,        // ADD
+    val tiltPoints: Float = 0f,        // ADD
+    val finalRiskPoints: Float = 0f,   // ADD
     val recommendations: List<DetailRecommendation> = emptyList(),
     val structuralVerticalTilt: Double? = null,
     val structuralHorizontalTilt: Double? = null,
@@ -81,7 +84,8 @@ data class DetailAreaData(
     val areaRisk: String = "Low Risk",
     val structuralAnalysisEnabled: Boolean = false,
     val images: List<DetailImageAssessment> = emptyList(),
-    val areaDescription: String = ""    // NEW
+    val areaDescription: String = "",   // NEW
+    val avgRiskPoints: Float = 0f  // ADD for area-level averaging
 )
 
 class AssessmentDetailsActivity : ComponentActivity() {
@@ -458,6 +462,9 @@ fun AssessmentDetailsScreen(
                                             detectedIssues = detectedIssues,
                                             imageRisk = imgItem["imageRisk"] as? String ?: "Low",
                                             plainConf = (imgItem["plainConf"] as? Number)?.toFloat() ?: 0f,
+                                            riskPoints = (imgItem["riskPoints"] as? Number)?.toFloat() ?: 0f,     // ADD
+                                            tiltPoints = (imgItem["tiltPoints"] as? Number)?.toFloat() ?: 0f,    // ADD
+                                            finalRiskPoints = (imgItem["finalRiskPoints"] as? Number)?.toFloat() ?: 0f, // ADD
                                             recommendations = recs,
                                             structuralVerticalTilt = (imgItem["structuralVerticalTilt"] as? Number)?.toDouble(),
                                             structuralHorizontalTilt = (imgItem["structuralHorizontalTilt"] as? Number)?.toDouble(),
@@ -487,19 +494,38 @@ fun AssessmentDetailsScreen(
             } finally {
                 isLoadingData = false
             }
+
+            // ⭐ NEW: Calculate area risks like AssessmentResultsScreen
+            areaData = areaData.map { area ->
+                val avgPoints = if (area.images.size >= 3) {
+                    area.images.map { it.finalRiskPoints }.average().toFloat()
+                } else 0f
+                val areaRisk = when {
+                    area.images.size < 3 -> "INSUFFICIENT"
+                    avgPoints >= 2.0f -> "SEVERE"
+                    avgPoints >= 1.0f -> "MODERATE"
+                    else -> "MINOR"
+                }
+                area.copy(
+                    areaRisk = areaRisk,
+                    avgRiskPoints = avgPoints
+                )
+            }
         }
     }
 
     val riskColor = when (overallRisk) {
-        "High Risk" -> Color(0xFFD32F2F)
-        "Moderate Risk" -> Color(0xFFF57C00)
-        else -> Color(0xFF388E3C)
+        "UNSAFE" -> Color(0xFFD32F2F)           // 🔴 Red for UNSAFE
+        "RESTRICTED" -> Color(0xFFF57C00)       // 🟠 Orange for RESTRICTED
+        "INSPECTED" -> Color(0xFF388E3C)        // 🟢 Green for INSPECTED
+        else -> Color(0xFF388E3C)               // Default green
     }
 
     val riskBgColor = when (overallRisk) {
-        "High Risk" -> Color(0xFFFFEBEE)
-        "Moderate Risk" -> Color(0xFFFFF3E0)
-        else -> Color(0xFFE8F5E9)
+        "UNSAFE" -> Color(0xFFFFEBEE)           // Light red
+        "RESTRICTED" -> Color(0xFFFFF3E0)       // Light orange
+        "INSPECTED" -> Color(0xFFE8F5E9)        // Light green
+        else -> Color(0xFFE8F5E9)               // Default
     }
 
     val allImages = areaData.flatMap { it.images }
@@ -920,7 +946,7 @@ fun AssessmentDetailsScreen(
                             if (severeCount > 0) {
                                 TiltQualityRow(
                                     label = "Serious slant (needs expert)",
-                                    description = "Walls or floors leaning more than 5°",
+                                    description = "Structure is leaning BADLY. GET EVERYONE OUT + call engineer TODAY",
                                     count = severeCount,
                                     percent = (severeCount * 100f / totalImages).toInt(),
                                     color = Color(0xFFEF4444)
@@ -930,7 +956,7 @@ fun AssessmentDetailsScreen(
                             if (moderateCount > 0) {
                                 TiltQualityRow(
                                     label = "Noticeable tilt",
-                                    description = "Tilted 2-5° - worth checking",
+                                    description = "Structure leaning enough to worry. Call building checker this week",
                                     count = moderateCount,
                                     percent = (moderateCount * 100f / totalImages).toInt(),
                                     color = Color(0xFFF59E0B)
@@ -940,7 +966,7 @@ fun AssessmentDetailsScreen(
                             if (minorCount > 0) {
                                 TiltQualityRow(
                                     label = "Slight tilt",
-                                    description = "Small tilt under 2° - usually normal",
+                                    description = "Slight lean - just keep an eye on it next time you check",
                                     count = minorCount,
                                     percent = (minorCount * 100f / totalImages).toInt(),
                                     color = Color(0xFF3B82F6)
@@ -1016,50 +1042,37 @@ fun AssessmentDetailsScreen(
             }
 
 
-            // ✅ AREA-BY-AREA ANALYSIS - With Icon Badge
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+// ✅ SIMPLE HEADER - NO BACKGROUND!
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier.size(32.dp),
-                        shape = CircleShape,
-                        color = Color.White
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Assignment,
-                                contentDescription = null,
-                                tint = Color(0xFF2563EB),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = "Area-by-Area Analysis",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1E40AF)
-                        )
-                        Text(
-                            text = "${areaData.size} ${if (areaData.size == 1) "area" else "areas"} analyzed",
-                            fontSize = 14.sp,
-                            color = Color(0xFF60A5FA)
-                        )
-                    }
+                // LEFT: Icon + Title
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Assignment,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Area-by-Area Analysis",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Black
+                    )
                 }
+
+                // RIGHT: Area count
+                Text(
+                    text = "${areaData.size} ${if (areaData.size == 1) "area" else "areas"}",                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF6B7280)
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1282,16 +1295,21 @@ fun AreaDetailsCard(
     }
 
     val areaRiskColor = when {
-        area.areaRisk.contains("High") -> Color(0xFFD32F2F)
-        area.areaRisk.contains("Moderate") -> Color(0xFFF57C00)
-        else -> Color(0xFF388E3C)
+        area.areaRisk == "SEVERE" -> Color(0xFFD32F2F)      // Red for SEVERE
+        area.areaRisk == "MODERATE" -> Color(0xFFF57C00)    // Orange for MODERATE
+        area.areaRisk == "MINOR" -> Color(0xFF388E3C)       // Green for MINOR
+        area.areaRisk == "INSUFFICIENT" -> Color(0xFF6B7280) // Gray for INSUFFICIENT
+        else -> Color(0xFF388E3C)                            // Default green
     }
 
     val areaHeaderBackgroundColor = when {
-        area.areaRisk.contains("High") -> Color(0xFFFFEBEE)
-        area.areaRisk.contains("Moderate") -> Color(0xFFFFF3E0)
-        else -> Color(0xFFE8F5E9)
+        area.areaRisk == "SEVERE" -> Color(0xFFFFEBEE)      // Light red
+        area.areaRisk == "MODERATE" -> Color(0xFFFFF3E0)    // Light orange
+        area.areaRisk == "MINOR" -> Color(0xFFE8F5E9)       // Light green
+        area.areaRisk == "INSUFFICIENT" -> Color(0xFFF1F5F9) // Light gray
+        else -> Color(0xFFE8F5E9)                            // Default
     }
+
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1311,11 +1329,10 @@ fun AreaDetailsCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Icon on top-left (smaller, cleaner)
+                // ⭐ ICON (smaller, cleaner)
                 Surface(
                     modifier = Modifier.size(36.dp),
                     shape = CircleShape,
-                    color = Color.White,
                     tonalElevation = 2.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -1328,11 +1345,8 @@ fun AreaDetailsCard(
                     }
                 }
 
-                // Text content takes remaining space
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // Area Name (bold, prominent)
+                // ⭐ AREA NAME/CONTENT
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = area.areaName,
                         fontSize = 18.sp,
@@ -1341,20 +1355,16 @@ fun AreaDetailsCard(
                         lineHeight = 22.sp,
                         maxLines = 1
                     )
-
-                    // Description (if exists) - wraps fully
                     if (area.areaDescription.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = area.areaDescription,
                             fontSize = 14.sp,
-                            color = Color(0xFF64748B), // Slate gray for better contrast
+                            color = Color(0xFF64748B),
                             lineHeight = 19.sp,
                             maxLines = 2
                         )
                     }
-
-                    // Photo count (subtle)
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1367,10 +1377,7 @@ fun AreaDetailsCard(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = if (area.images.size == 1)
-                                "1 photo analyzed"
-                            else
-                                "${area.images.size} photos analyzed",
+                            text = if (area.images.size == 1) "1 photo analyzed" else "${area.images.size} photos analyzed",
                             fontSize = 13.sp,
                             color = Color(0xFF9CA3AF),
                             fontWeight = FontWeight.Medium
@@ -1378,7 +1385,7 @@ fun AreaDetailsCard(
                     }
                 }
 
-                // Right side: Risk badge + expand icon (compact)
+                // ⭐ RISK BADGE + EXPAND ICON
                 Column(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     horizontalAlignment = Alignment.End
@@ -1397,10 +1404,7 @@ fun AreaDetailsCard(
                         )
                     }
                     Icon(
-                        imageVector = if (isExpanded)
-                            Icons.Default.ExpandLess
-                        else
-                            Icons.Default.ExpandMore,
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
                         tint = Color(0xFF64748B),
                         modifier = Modifier.size(20.dp)
@@ -1596,24 +1600,9 @@ fun ImageAnalysisCard(
                         )
                     }
 
-                    val riskColor = when (imageAssessment.imageRisk) {
-                        "High" -> Color(0xFFD32F2F)
-                        "Moderate" -> Color(0xFFF57C00)
-                        else -> Color(0xFF388E3C)
-                    }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = riskColor.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = imageAssessment.imageRisk.uppercase(),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = riskColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
+
+
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))

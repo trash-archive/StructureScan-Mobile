@@ -3,6 +3,7 @@ package com.example.structurescan
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -56,10 +57,20 @@ class BuildingAreaActivity : ComponentActivity() {
 
         val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: "Unnamed Assessment"
 
+        // ⭐ CRITICAL FIX: Load building areas from intent if they exist
+        val savedBuildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS)
+        } ?: arrayListOf()
+
         setContent {
             MaterialTheme {
                 BuildingAreaScreen(
                     assessmentName = assessmentName,
+                    initialBuildingAreas = savedBuildingAreas,  // ⭐ PASS TO COMPOSABLE
+
                     onBackClick = {
                         finish()
                     },
@@ -84,10 +95,11 @@ class BuildingAreaActivity : ComponentActivity() {
 @Composable
 fun BuildingAreaScreen(
     assessmentName: String,
+    initialBuildingAreas: List<BuildingArea> = emptyList(),  // ⭐ NEW PARAMETER
     onBackClick: () -> Unit,
     onProceedToInfo: (List<BuildingArea>) -> Unit
 ) {
-    var buildingAreas by remember { mutableStateOf<List<BuildingArea>>(emptyList()) }
+    var buildingAreas by remember { mutableStateOf(initialBuildingAreas) }
     var currentScreen by remember { mutableStateOf<AreaScreen>(AreaScreen.AreaList) }
     var selectedArea by remember { mutableStateOf<BuildingArea?>(null) }
     var showAreaDialog by remember { mutableStateOf(false) }

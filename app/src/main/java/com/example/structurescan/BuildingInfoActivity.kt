@@ -29,11 +29,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 class BuildingInfoActivity : ComponentActivity() {
+    // ⭐ ADD: Store original data
+    private lateinit var originalBuildingAreas: ArrayList<BuildingArea>
+    private lateinit var originalAssessmentName: String
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val assessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: ""
-        val buildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        // ⭐ STORE originals FIRST
+        originalAssessmentName = intent.getStringExtra(IntentKeys.ASSESSMENT_NAME) ?: ""
+        originalBuildingAreas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, BuildingArea::class.java)
         } else {
             @Suppress("DEPRECATION")
@@ -43,11 +48,21 @@ class BuildingInfoActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 BuildingInfoScreen(
-                    onBack = { finish() },
+                    assessmentName = originalAssessmentName,        // ⭐ ADD THIS
+                    buildingAreas = originalBuildingAreas,          // ⭐ ADD THIS
+                    onBack = {
+                        // ✅ Back to BuildingAreaActivity with ORIGINALS
+                        val intent = Intent(this@BuildingInfoActivity, BuildingAreaActivity::class.java).apply {
+                            putParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, ArrayList(originalBuildingAreas))
+                            putExtra(IntentKeys.ASSESSMENT_NAME, originalAssessmentName)
+                        }
+                        startActivity(intent)
+                        finish()
+                    },
                     onSubmit = { buildingInfo ->
                         val intent = Intent(this@BuildingInfoActivity, AssessmentResultsActivity::class.java).apply {
-                            putExtra(IntentKeys.ASSESSMENT_NAME, assessmentName)
-                            putParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, ArrayList(buildingAreas))
+                            putExtra(IntentKeys.ASSESSMENT_NAME, originalAssessmentName)
+                            putParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, ArrayList(originalBuildingAreas))
 
                             // Building info
                             putExtra(IntentKeys.BUILDING_TYPE, buildingInfo.buildingType)
@@ -72,7 +87,19 @@ class BuildingInfoActivity : ComponentActivity() {
             }
         }
     }
+
+    // ⭐ CRITICAL: Handle SYSTEM BACK BUTTON
+    override fun onBackPressed() {
+        // Go back to BuildingAreaActivity (same as UI back)
+        val intent = Intent(this, BuildingAreaActivity::class.java).apply {
+            putParcelableArrayListExtra(IntentKeys.BUILDING_AREAS, ArrayList(originalBuildingAreas))
+            putExtra(IntentKeys.ASSESSMENT_NAME, originalAssessmentName)
+        }
+        startActivity(intent)
+        finish()
+    }
 }
+
 
 data class BuildingInfo(
     val buildingType: String,
@@ -93,7 +120,12 @@ data class BuildingInfo(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
+fun BuildingInfoScreen(
+    assessmentName: String,
+    buildingAreas: List<BuildingArea>,
+    onBack: () -> Unit,
+    onSubmit: (BuildingInfo) -> Unit
+) {
     val context = LocalContext.current
 
     // State variables
@@ -449,15 +481,31 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
 
             // Previous Issues
-            Text("Previous Issues or Repairs", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-            Text("Select any issues noticed before", fontSize = 14.sp, color = Color(0xFF6B7280))
+            Text(
+                "Previous Issues or Repairs",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black
+            )
+            Text(
+                "Select any issues noticed before",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf("Wall cracks", "Foundation settling", "Water damage", "Recent repairs").forEach { issue ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Checkbox(
                             checked = issue in selectedIssues,
-                            onCheckedChange = { if (it) selectedIssues.add(issue) else selectedIssues.remove(issue) },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2196F3), uncheckedColor = Color(0xFF9CA3AF))
+                            onCheckedChange = {
+                                if (it) selectedIssues.add(issue)
+                                else selectedIssues.remove(issue)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF2196F3),
+                                uncheckedColor = Color(0xFF9CA3AF)
+                            )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(issue, fontSize = 14.sp, color = Color.Black)
@@ -467,15 +515,28 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
 
             // Building Usage
-            Text("Building Usage", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-            Text("Select occupancy level", fontSize = 14.sp, color = Color(0xFF6B7280))
+            Text(
+                "Building Usage",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black
+            )
+            Text(
+                "Select occupancy level",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 occupancyOptions.forEach { level ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         RadioButton(
                             selected = selectedOccupancy == level,
                             onClick = { selectedOccupancy = level },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3), unselectedColor = Color(0xFF9CA3AF))
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = Color(0xFF2196F3),
+                                unselectedColor = Color(0xFF9CA3AF)
+                            )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(level, fontSize = 14.sp, color = Color.Black)
@@ -485,31 +546,63 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
 
             // Environmental Exposure
-            Text("Environmental Exposure", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-            Text("Select any known natural disaster risks", fontSize = 14.sp, color = Color(0xFF6B7280))
+            Text(
+                "Environmental Exposure",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black
+            )
+            Text(
+                "Select any known natural disaster risks",
+                fontSize = 14.sp,
+                color = Color(0xFF6B7280)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf("Earthquake-prone Area", "High Winds", "Flood Zone", "Landslide Risk", "Coastal Erosion")
-                    .forEach { risk ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Checkbox(
-                                checked = risk in selectedRisks,
-                                onCheckedChange = { if (it) selectedRisks.add(risk) else selectedRisks.remove(risk) },
-                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2196F3), uncheckedColor = Color(0xFF9CA3AF))
+                listOf(
+                    "Earthquake-prone Area", "High Winds", "Flood Zone",
+                    "Landslide Risk", "Coastal Erosion"
+                ).forEach { risk ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Checkbox(
+                            checked = risk in selectedRisks,
+                            onCheckedChange = {
+                                if (it) selectedRisks.add(risk)
+                                else selectedRisks.remove(risk)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF2196F3),
+                                uncheckedColor = Color(0xFF9CA3AF)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(risk, fontSize = 14.sp, color = Color.Black)
-                        }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(risk, fontSize = 14.sp, color = Color.Black)
                     }
+                }
             }
             Spacer(modifier = Modifier.height(32.dp))
 
             // Notes
-            Text("Additional Notes", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+            Text(
+                "Additional Notes",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                placeholder = { Text("e.g., Recent water leaks...", color = Color(0xFF9CA3AF), fontSize = 16.sp) },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
+                placeholder = {
+                    Text(
+                        "e.g., Recent water leaks...",
+                        color = Color(0xFF9CA3AF),
+                        fontSize = 16.sp
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
                 maxLines = 5,
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -522,11 +615,16 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
             // Continue Button
             Button(
                 onClick = {
+                    // Validate years
                     if (constructionYear.isNotEmpty() && renovationYear.isNotEmpty()) {
                         val constructionYearInt = constructionYear.toIntOrNull()
                         val renovationYearInt = renovationYear.toIntOrNull()
-                        if (constructionYearInt != null && renovationYearInt != null && renovationYearInt < constructionYearInt) {
-                            Toast.makeText(context, "Renovation year cannot be earlier than construction year", Toast.LENGTH_LONG).show()
+                        if (constructionYearInt != null && renovationYearInt != null &&
+                            renovationYearInt < constructionYearInt) {
+                            Toast.makeText(context,
+                                "Renovation year cannot be earlier than construction year",
+                                Toast.LENGTH_LONG
+                            ).show()
                             return@Button
                         }
                     }
@@ -554,7 +652,12 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                Text("Continue", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text(
+                    "Continue",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -573,6 +676,11 @@ fun BuildingInfoScreen(onBack: () -> Unit, onSubmit: (BuildingInfo) -> Unit) {
 @Composable
 fun BuildingInfoPreview() {
     MaterialTheme {
-        BuildingInfoScreen(onBack = {}, onSubmit = {})
+        BuildingInfoScreen(
+            assessmentName = "Test Assessment",
+            buildingAreas = emptyList(),
+            onBack = {},
+            onSubmit = {}
+        )
     }
 }

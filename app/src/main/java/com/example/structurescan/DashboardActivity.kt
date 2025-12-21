@@ -337,11 +337,12 @@ fun DashboardScreen(
 fun AssessmentCard(assessment: AssessmentItem) {
     val context = LocalContext.current
 
-    // Determine risk color
+    // ✅ EXACT COLORS FROM ASSESSMENT RESULTS
     val riskColor = when (assessment.overallRisk) {
-        "High Risk" -> Color(0xFFEF5350)
-        "Moderate Risk" -> Color(0xFFFF9800)
-        "Low Risk" -> Color(0xFF81C784)
+        "High Risk", "UNSAFE" -> Color(0xFFD32F2F)      // RED
+        "Moderate Risk", "RESTRICTED" -> Color(0xFFF57C00) // ORANGE
+        "Low Risk", "INSPECTED" -> Color(0xFF388E3C)    // GREEN
+        "GOOD" -> Color(0xFF2E7D32)                     // DARK GREEN
         else -> Color.Gray
     }
 
@@ -352,7 +353,6 @@ fun AssessmentCard(assessment: AssessmentItem) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                // ✅ MODIFIED: Navigate to AssessmentDetailsActivity with all data including building info
                 val intent = Intent(context, AssessmentDetailsActivity::class.java).apply {
                     putExtra("ASSESSMENT_ID", assessment.id)
                     putExtra("ASSESSMENT_TITLE", assessment.assessmentName)
@@ -368,8 +368,6 @@ fun AssessmentCard(assessment: AssessmentItem) {
                     putExtra("ALGAE_HIGH", assessment.algaeHighCount)
                     putExtra("ALGAE_MODERATE", assessment.algaeModerateCount)
                     putExtra("ALGAE_LOW", assessment.algaeLowCount)
-
-                    // ✅ NEW: Pass building information
                     putExtra("BUILDING_TYPE", assessment.buildingType)
                     putExtra("CONSTRUCTION_YEAR", assessment.constructionYear)
                     putExtra("RENOVATION_YEAR", assessment.renovationYear)
@@ -435,7 +433,7 @@ fun AssessmentCard(assessment: AssessmentItem) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Risk badge
+                // ✅ FIXED: Risk badge with PROPER COLORS
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = riskColor
@@ -452,6 +450,7 @@ fun AssessmentCard(assessment: AssessmentItem) {
         }
     }
 }
+
 
 @Composable
 fun BottomNavigationBarDashboard(
