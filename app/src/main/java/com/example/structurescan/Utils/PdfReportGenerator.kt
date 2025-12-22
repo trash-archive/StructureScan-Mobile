@@ -1,5 +1,5 @@
-
 package com.example.structurescan.Utils
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,8 +10,6 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.os.Environment
 import android.util.Log
-import android.content.res.Resources.getSystem
-import com.example.structurescan.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,11 +30,13 @@ data class AreaSummary(
     val maxTiltSeverity: String? = null
 )
 
-// ✅ NEW: Image with metadata
+// ✅ UPDATED: Image with metadata including location name
 data class ImageDetail(
     val imageUrl: String = "",
-    val imageName: String = "",
-    val areaName: String = ""
+    val areaName: String = "",
+    val locationName: String = "",  // ✅ Location from PhotoMetadata
+    val imageNumber: Int = 1,
+    val totalImages: Int = 1
 )
 
 data class PdfAssessmentData(
@@ -93,98 +93,115 @@ object PdfReportGenerator {
             var canvas = page.canvas
 
             // ========== COVER PAGE ==========
-// Line ~95 - CHANGE:
             yPosition = drawHeader(canvas, data.assessmentName, data.date, yPosition, context)
             yPosition += 20
             yPosition = drawRiskBadge(canvas, data.overallRisk, yPosition)
             yPosition += 30
             yPosition = drawSummaryText(canvas, data, yPosition)
-            yPosition += 40
+
+            pdfDocument.finishPage(page)
+            pageNumber++
+
+            // ========== TABLE OF CONTENTS ==========
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDocument.startPage(pageInfo)
+            canvas = page.canvas
+            yPosition = MARGIN
+
+            yPosition = drawSectionHeader(canvas, "Table of Contents", yPosition)
+            yPosition += 20
+            yPosition = drawTableOfContents(canvas, data, yPosition)
+
+            pdfDocument.finishPage(page)
+            pageNumber++
+
+            // ========== EXECUTIVE SUMMARY ==========
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDocument.startPage(pageInfo)
+            canvas = page.canvas
+            yPosition = MARGIN
+
+            yPosition = drawSectionHeader(canvas, "Executive Summary", yPosition)
+            yPosition += 8
+            yPosition = drawExecutiveSummary(canvas, data, yPosition)
+
+            pdfDocument.finishPage(page)
+            pageNumber++
 
             // ========== LOCATION & ADDRESS INFO ==========
-            yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 120, ++pageNumber)
-            if (yPosition == MARGIN) {
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDocument.startPage(pageInfo)
+            canvas = page.canvas
+            yPosition = MARGIN
+
+            yPosition = drawSectionHeader(canvas, "Location & Building Information", yPosition)
+            yPosition += 8
+            yPosition = drawLocationInfo(canvas, data, yPosition)
+            yPosition += 15
+            yPosition = drawBuildingInfo(canvas, data, yPosition)
+
+            pdfDocument.finishPage(page)
+            pageNumber++
+
+            // ========== AREAS & RISK SUMMARY (COMPACT TABLE) ==========
+            if (data.areasData.isNotEmpty()) {
                 pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
                 page = pdfDocument.startPage(pageInfo)
                 canvas = page.canvas
-            }
-            yPosition = drawSectionHeader(canvas, "Location Information", yPosition)
-            drawLogo(canvas, context)  // ✅ ADD THIS
-            yPosition += 8
-            yPosition = drawLocationInfo(canvas, data, yPosition)
-            yPosition += 25
+                yPosition = MARGIN
 
-            // ========== BUILDING INFORMATION ==========
-            if (data.buildingType.isNotEmpty() || data.material.isNotEmpty()) {
-                yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 180, ++pageNumber)
-                if (yPosition == MARGIN) {
-                    pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-                    page = pdfDocument.startPage(pageInfo)
-                    canvas = page.canvas
-                }
-                yPosition = drawSectionHeader(canvas, "Building Information", yPosition)
-                yPosition += 8
-                yPosition = drawBuildingInfo(canvas, data, yPosition)
-                yPosition += 25
-            }
-
-            // ========== AREAS & RISK SUMMARY ==========
-            if (data.areasData.isNotEmpty()) {
-                yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 150, ++pageNumber)
-                if (yPosition == MARGIN) {
-                    pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-                    page = pdfDocument.startPage(pageInfo)
-                    canvas = page.canvas
-                }
                 yPosition = drawSectionHeader(canvas, "Area Assessment Summary", yPosition)
                 yPosition += 8
-                yPosition = drawAreasSummary(canvas, data.areasData, yPosition)
-                yPosition += 25
+                yPosition = drawAreasSummaryTable(canvas, data.areasData, yPosition)
+
+                pdfDocument.finishPage(page)
+                pageNumber++
             }
 
             // ========== DAMAGE DETECTION SUMMARY ==========
-            yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 150, ++pageNumber)
-            if (yPosition == MARGIN) {
-                pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-                page = pdfDocument.startPage(pageInfo)
-                canvas = page.canvas
-            }
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDocument.startPage(pageInfo)
+            canvas = page.canvas
+            yPosition = MARGIN
+
             yPosition = drawSectionHeader(canvas, "Damage Detection Summary", yPosition)
             yPosition += 8
             yPosition = drawDetectionSummary(canvas, data, yPosition)
-            yPosition += 25
+
+            pdfDocument.finishPage(page)
+            pageNumber++
 
             // ========== DETAILED RECOMMENDATIONS ==========
-            yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 160, ++pageNumber)
-            if (yPosition == MARGIN) {
-                pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-                page = pdfDocument.startPage(pageInfo)
-                canvas = page.canvas
-            }
-            yPosition = drawSectionHeader(canvas, "Detailed Recommendations & Actions", yPosition)
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDocument.startPage(pageInfo)
+            canvas = page.canvas
+            yPosition = MARGIN
+
+            yPosition = drawSectionHeader(canvas, "Recommendations & Actions", yPosition)
             yPosition += 8
             yPosition = drawRecommendations(canvas, data, yPosition)
-            yPosition += 25
+
+            pdfDocument.finishPage(page)
+            pageNumber++
 
             // ========== ASSESSMENT NOTES ==========
             if (data.notes.isNotEmpty()) {
-                yPosition = checkAndCreateNewPage(pdfDocument, page, canvas, yPosition, 120, ++pageNumber)
-                if (yPosition == MARGIN) {
-                    pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-                    page = pdfDocument.startPage(pageInfo)
-                    canvas = page.canvas
-                }
+                pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+                page = pdfDocument.startPage(pageInfo)
+                canvas = page.canvas
+                yPosition = MARGIN
+
                 yPosition = drawSectionHeader(canvas, "Additional Notes", yPosition)
                 yPosition += 8
                 yPosition = drawNotesSection(canvas, data.notes, yPosition)
-                yPosition += 25
+
+                pdfDocument.finishPage(page)
+                pageNumber++
             }
 
-            // ========== IMAGE PAGES WITH METADATA ==========
+            // ========== IMAGE PAGES (4:3 LAYOUT) ==========
             if (data.imageDetails.isNotEmpty()) {
-                pdfDocument.finishPage(page)
-
-                data.imageDetails.forEachIndexed { index, imageDetail ->
+                data.imageDetails.forEach { imageDetail ->
                     if (imageDetail.imageUrl.isNotEmpty()) {
                         pageNumber++
                         pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
@@ -194,19 +211,18 @@ object PdfReportGenerator {
                         drawImagePage(
                             canvas,
                             imageDetail.imageUrl,
-                            imageDetail.imageName,
                             imageDetail.areaName,
-                            index + 1,
-                            data.imageDetails.size,
+                            imageDetail.locationName,
+                            imageDetail.imageNumber,
+                            imageDetail.totalImages,
                             context
                         )
                         pdfDocument.finishPage(page)
                     }
                 }
-            } else {
-                pdfDocument.finishPage(page)
             }
 
+            // ========== SAVE PDF ==========
             val fileName = "Assessment_${data.assessmentName.replace(" ", "_")}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.pdf"
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -225,9 +241,7 @@ object PdfReportGenerator {
                     }
                     pdfDocument.close()
                     Log.d("PdfGenerator", "PDF saved to Downloads: $fileName")
-
-                    val tempFile = File(context.cacheDir, fileName)
-                    tempFile.absolutePath
+                    uri.toString()
                 } else {
                     throw Exception("Failed to create file in Downloads")
                 }
@@ -250,54 +264,157 @@ object PdfReportGenerator {
         }
     }
 
-    private fun checkAndCreateNewPage(
-        pdfDocument: PdfDocument,
-        currentPage: PdfDocument.Page,
-        canvas: Canvas,
-        currentY: Int,
-        requiredSpace: Int,
-        newPageNumber: Int
-    ): Int {
-        return if (currentY + requiredSpace > PAGE_HEIGHT - MARGIN) {
-            pdfDocument.finishPage(currentPage)
-            MARGIN
-        } else {
-            currentY
+    // ✅ NEW: Table of Contents
+    private fun drawTableOfContents(canvas: Canvas, data: PdfAssessmentData, startY: Int): Int {
+        var yPos = startY
+        val paint = Paint().apply {
+            textSize = 12f
+            color = android.graphics.Color.BLACK
         }
+
+        val contents = listOf(
+            "Executive Summary" to "3",
+            "Location & Building Information" to "4",
+            if (data.areasData.isNotEmpty()) "Area Assessment Summary" to "5" else null,
+            "Damage Detection Summary" to if (data.areasData.isNotEmpty()) "6" else "5",
+            "Recommendations & Actions" to if (data.areasData.isNotEmpty()) "7" else "6",
+            if (data.notes.isNotEmpty()) "Additional Notes" to if (data.areasData.isNotEmpty()) "8" else "7" else null,
+            "Analyzed Images" to if (data.imageDetails.isNotEmpty()) "9+" else "N/A"
+        ).filterNotNull()
+
+        contents.forEach { (title, page) ->
+            canvas.drawText("• $title", MARGIN.toFloat(), yPos.toFloat(), paint)
+            canvas.drawText(page, (PAGE_WIDTH - MARGIN - 30).toFloat(), yPos.toFloat(), paint)
+            yPos += LINE_HEIGHT + 4
+        }
+
+        return yPos
     }
 
-    // ✅ FIXED: Perfect 1:1 square logo (no stretching!)
-    private fun drawLogo(canvas: Canvas, context: Context): Int {
-        try {
-            val logo = BitmapFactory.decodeResource(context.resources, R.drawable.logo)
+    // ✅ NEW: Executive Summary
+    private fun drawExecutiveSummary(canvas: Canvas, data: PdfAssessmentData, startY: Int): Int {
+        var yPos = startY
+        val paint = Paint().apply {
+            textSize = 11f
+            color = android.graphics.Color.BLACK
+        }
 
-            if (logo != null) {
-                // ✅ SINGLE SCALE FACTOR for perfect 1:1 square
-                val logoSize = 60f  // Perfect size for 115x115 logo
-                val scale = logoSize / logo.width.toFloat()  // SAME for width + height
+        val summaryText = buildString {
+            append("Assessment Status: ${data.overallRisk}\n\n")
+            append("Photos Analyzed: ${data.imageDetails.size}\n")
+            append("Total Issues Detected: ${data.totalIssues}\n")
+            append("Areas Assessed: ${data.areasData.size}\n\n")
 
-                val matrix = android.graphics.Matrix().apply {
-                    postScale(scale, scale)  // ✅ SAME scale → no stretch!
-                }
-
-                val scaledLogo = Bitmap.createBitmap(
-                    logo, 0, 0, logo.width, logo.height, matrix, true
-                )
-
-                // Position top-right
-                val rightMargin = PAGE_WIDTH - MARGIN.toFloat()
-                canvas.drawBitmap(scaledLogo, rightMargin - logoSize - 10f, 25f, null)
-
-                logo.recycle()
-                scaledLogo.recycle()
+            if (data.totalIssues > 0) {
+                append("Key Findings:\n")
+                if (data.crackHighCount > 0) append("• ${data.crackHighCount} serious concrete damage detected\n")
+                if (data.crackModerateCount > 0) append("• ${data.crackModerateCount} large cracks identified\n")
+                if (data.crackLowCount > 0) append("• ${data.crackLowCount} hairline cracks noted\n")
+                if (data.paintCount > 0) append("• ${data.paintCount} paint damage areas found\n")
+                if (data.algaeCount > 0) append("• ${data.algaeCount} biological growth detected\n")
+            } else {
+                append("No significant structural issues detected.")
             }
-        } catch (e: Exception) {
-            Log.w("PdfLogo", "Logo error: ${e.message}")
         }
-        return 0
+
+        val lines = wrapText(summaryText, paint, PAGE_WIDTH - 2 * MARGIN)
+        lines.forEach { line ->
+            canvas.drawText(line, MARGIN.toFloat(), yPos.toFloat(), paint)
+            yPos += if (line.isEmpty()) 8 else LINE_HEIGHT
+        }
+
+        return yPos
     }
 
+    // ✅ UPDATED: Compact Area Summary Table
+    private fun drawAreasSummaryTable(canvas: Canvas, areas: List<AreaSummary>, startY: Int): Int {
+        var yPos = startY
+        val headerPaint = Paint().apply {
+            textSize = 10f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.WHITE
+        }
+        val textPaint = Paint().apply {
+            textSize = 9f
+            color = android.graphics.Color.BLACK
+        }
 
+        val cellHeight = 30
+        val colWidths = intArrayOf(120, 70, 50, 70, 100)  // Area | Risk | Photos | Tilt | Issues
+
+        // ✅ Header Row
+        val headerBgPaint = Paint().apply {
+            color = android.graphics.Color.parseColor("#0288D1")
+        }
+        canvas.drawRect(
+            MARGIN.toFloat(),
+            yPos.toFloat(),
+            (PAGE_WIDTH - MARGIN).toFloat(),
+            (yPos + cellHeight).toFloat(),
+            headerBgPaint
+        )
+
+        var xPos = MARGIN + 5
+        canvas.drawText("Area", xPos.toFloat(), (yPos + 20).toFloat(), headerPaint)
+        xPos += colWidths[0]
+        canvas.drawText("Risk", xPos.toFloat(), (yPos + 20).toFloat(), headerPaint)
+        xPos += colWidths[1]
+        canvas.drawText("Photos", xPos.toFloat(), (yPos + 20).toFloat(), headerPaint)
+        xPos += colWidths[2]
+        canvas.drawText("Tilt", xPos.toFloat(), (yPos + 20).toFloat(), headerPaint)
+        xPos += colWidths[3]
+        canvas.drawText("Issues", xPos.toFloat(), (yPos + 20).toFloat(), headerPaint)
+
+        yPos += cellHeight + 2
+
+        // ✅ Data Rows
+        val borderPaint = Paint().apply {
+            color = android.graphics.Color.parseColor("#E0E0E0")
+            strokeWidth = 0.5f
+        }
+
+        areas.forEach { area ->
+            // Border
+            canvas.drawRect(
+                MARGIN.toFloat(),
+                yPos.toFloat(),
+                (PAGE_WIDTH - MARGIN).toFloat(),
+                (yPos + cellHeight).toFloat(),
+                borderPaint
+            )
+
+            xPos = MARGIN + 5
+
+            // Area Name
+            canvas.drawText(area.areaName, xPos.toFloat(), (yPos + 16).toFloat(), textPaint)
+            xPos += colWidths[0]
+
+            // Risk
+            canvas.drawText(area.areaRisk, xPos.toFloat(), (yPos + 16).toFloat(), textPaint)
+            xPos += colWidths[1]
+
+            // Photos
+            canvas.drawText("${area.imageCount}", xPos.toFloat(), (yPos + 16).toFloat(), textPaint)
+            xPos += colWidths[2]
+
+            // Tilt
+            val tiltText = if (area.maxTiltAngle != null) {
+                "${String.format("%.1f", area.maxTiltAngle)}°"
+            } else "None"
+            canvas.drawText(tiltText, xPos.toFloat(), (yPos + 16).toFloat(), textPaint)
+            xPos += colWidths[3]
+
+            // Issues
+            val issuesText = if (area.detectedIssues.isNotEmpty()) {
+                area.detectedIssues.size.toString()
+            } else "None"
+            canvas.drawText(issuesText, xPos.toFloat(), (yPos + 16).toFloat(), textPaint)
+
+            yPos += cellHeight + 2
+        }
+
+        return yPos + 10
+    }
 
     private fun drawHeader(canvas: Canvas, title: String, date: String, startY: Int, context: Context): Int {
         drawLogo(canvas, context)
@@ -323,6 +440,33 @@ object PdfReportGenerator {
         return yPos
     }
 
+    private fun drawLogo(canvas: Canvas, context: Context): Int {
+        try {
+            val logo = BitmapFactory.decodeResource(context.resources, com.example.structurescan.R.drawable.logo)
+
+            if (logo != null) {
+                val logoSize = 60f
+                val scale = logoSize / logo.width.toFloat()
+
+                val matrix = android.graphics.Matrix().apply {
+                    postScale(scale, scale)
+                }
+
+                val scaledLogo = Bitmap.createBitmap(
+                    logo, 0, 0, logo.width, logo.height, matrix, true
+                )
+
+                val rightMargin = PAGE_WIDTH - MARGIN.toFloat()
+                canvas.drawBitmap(scaledLogo, rightMargin - logoSize - 10f, 25f, null)
+
+                logo.recycle()
+                scaledLogo.recycle()
+            }
+        } catch (e: Exception) {
+            Log.w("PdfLogo", "Logo error: ${e.message}")
+        }
+        return 0
+    }
 
     private fun drawRiskBadge(canvas: Canvas, riskLevel: String, startY: Int): Int {
         val paint = Paint()
@@ -351,7 +495,6 @@ object PdfReportGenerator {
         return startY + 55
     }
 
-    // ✅ Location Information Section
     private fun drawLocationInfo(canvas: Canvas, data: PdfAssessmentData, startY: Int): Int {
         var yPos = startY
         val labelPaint = Paint().apply {
@@ -420,79 +563,6 @@ object PdfReportGenerator {
         return yPos
     }
 
-    // ✅ UPDATED: Areas Summary with user-friendly risk scores (NO areaType)
-    private fun drawAreasSummary(canvas: Canvas, areas: List<AreaSummary>, startY: Int): Int {
-        var yPos = startY
-        val headerPaint = Paint().apply {
-            textSize = 11f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = android.graphics.Color.BLACK
-        }
-        val textPaint = Paint().apply {
-            textSize = 10f
-            color = android.graphics.Color.BLACK
-        }
-        val riskPaint = Paint().apply {
-            textSize = 10f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = android.graphics.Color.BLACK
-        }
-
-        areas.forEachIndexed { _, area ->
-            // Area Header
-            canvas.drawText("▸ ${area.areaName}", MARGIN.toFloat(), yPos.toFloat(), headerPaint)
-            yPos += LINE_HEIGHT
-
-            // Risk Level
-            canvas.drawText("Risk: ${area.areaRisk}", (MARGIN + 15).toFloat(), yPos.toFloat(), textPaint)
-            yPos += SMALL_LINE_HEIGHT
-
-            // ✅ USER-FRIENDLY Risk Score (LOW/MEDIUM/HIGH instead of numbers)
-            val riskLevelText = when {
-                area.avgRiskPoints < 1.0f -> "LOW"
-                area.avgRiskPoints < 2.0f -> "MEDIUM"
-                else -> "HIGH"
-            }
-            val riskColor = when {
-                area.avgRiskPoints < 1.0f -> android.graphics.Color.parseColor("#388E3C")
-                area.avgRiskPoints < 2.0f -> android.graphics.Color.parseColor("#F57C00")
-                else -> android.graphics.Color.parseColor("#D32F2F")
-            }
-            val riskColorPaint = Paint().apply { color = riskColor }
-            canvas.drawCircle((MARGIN + 20).toFloat(), (yPos - 3).toFloat(), 3f, riskColorPaint)
-            riskPaint.color = riskColor
-            canvas.drawText("Risk Score: $riskLevelText (${String.format("%.1f", area.avgRiskPoints)}/3.0 points)", (MARGIN + 30).toFloat(), yPos.toFloat(), riskPaint)
-            yPos += SMALL_LINE_HEIGHT
-
-            // Image Count
-            canvas.drawText("Photos Analyzed: ${area.imageCount}", (MARGIN + 30).toFloat(), yPos.toFloat(), textPaint)
-            yPos += SMALL_LINE_HEIGHT
-
-            // ✅ TILT: Show MAX tilt across all photos in this area
-            if (area.structuralAnalysisEnabled && area.maxTiltAngle != null) {
-                canvas.drawText("Worst Tilt: ${String.format("%.1f", area.maxTiltAngle)}° (${area.maxTiltSeverity})", (MARGIN + 30).toFloat(), yPos.toFloat(), textPaint)
-                yPos += SMALL_LINE_HEIGHT
-            } else if (area.structuralAnalysisEnabled) {
-                canvas.drawText("Structural Tilt: No issues detected", (MARGIN + 30).toFloat(), yPos.toFloat(), textPaint)
-                yPos += SMALL_LINE_HEIGHT
-            }
-
-            // Issues
-            if (area.detectedIssues.isNotEmpty()) {
-                val issuesText = area.detectedIssues.joinToString(", ")
-                val issueLines = wrapText("Issues: $issuesText", textPaint, PAGE_WIDTH - 2 * MARGIN - 30)
-                issueLines.forEach { line ->
-                    canvas.drawText(line, (MARGIN + 30).toFloat(), yPos.toFloat(), textPaint)
-                    yPos += SMALL_LINE_HEIGHT
-                }
-            }
-
-            yPos += 8 // Spacing between areas
-        }
-
-        return yPos
-    }
-
     private fun drawSectionHeader(canvas: Canvas, title: String, startY: Int): Int {
         val paint = Paint().apply {
             textSize = 16f
@@ -501,7 +571,6 @@ object PdfReportGenerator {
         }
         canvas.drawText(title, MARGIN.toFloat(), startY.toFloat(), paint)
 
-        // Underline
         val linePaint = Paint().apply {
             color = android.graphics.Color.parseColor("#0288D1")
             strokeWidth = 1.5f
@@ -628,8 +697,6 @@ object PdfReportGenerator {
         return yPos
     }
 
-    // ✅ Detailed Recommendations
-// ✅ FIXED: Shows ALL recommendations - no truncation
     private fun drawRecommendations(canvas: Canvas, data: PdfAssessmentData, startY: Int): Int {
         var yPos = startY
         val titlePaint = Paint().apply {
@@ -641,19 +708,14 @@ object PdfReportGenerator {
             textSize = 10f
             color = android.graphics.Color.BLACK
         }
-        val severityPaint = Paint().apply {
-            textSize = 10f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = android.graphics.Color.parseColor("#D32F2F")
-        }
 
-        val recommendations = mutableListOf<Triple<String, Int, String>>()
+        val recommendations = mutableListOf<Pair<String, String>>()
 
-        if (data.crackHighCount > 0) recommendations.add(Triple("Serious Concrete Damage", data.crackHighCount, "CRITICAL"))
-        if (data.crackModerateCount > 0) recommendations.add(Triple("Large Cracks", data.crackModerateCount, "HIGH"))
-        if (data.crackLowCount > 0) recommendations.add(Triple("Hairline Cracks", data.crackLowCount, "LOW"))
-        if (data.paintCount > 0) recommendations.add(Triple("Paint Peeling", data.paintCount, "LOW"))
-        if (data.algaeCount > 0) recommendations.add(Triple("Algae/Moss Growth", data.algaeCount, "MODERATE"))
+        if (data.crackHighCount > 0) recommendations.add("Serious Concrete Damage" to "CRITICAL")
+        if (data.crackModerateCount > 0) recommendations.add("Large Cracks" to "HIGH")
+        if (data.crackLowCount > 0) recommendations.add("Hairline Cracks" to "LOW")
+        if (data.paintCount > 0) recommendations.add("Paint Peeling" to "LOW")
+        if (data.algaeCount > 0) recommendations.add("Algae/Moss Growth" to "MODERATE")
 
         if (recommendations.isEmpty()) {
             canvas.drawText("✓ No Issues Detected", MARGIN.toFloat(), yPos.toFloat(), titlePaint)
@@ -663,19 +725,12 @@ object PdfReportGenerator {
             return yPos
         }
 
-        recommendations.forEach { (title, count, severity) ->
+        recommendations.forEach { (title, severity) ->
             canvas.drawText("• $title", MARGIN.toFloat(), yPos.toFloat(), titlePaint)
-            canvas.drawText("[$severity]", (MARGIN + 200).toFloat(), yPos.toFloat(), severityPaint)
             yPos += LINE_HEIGHT
 
-            if (count > 1) {
-                canvas.drawText("Detected in $count locations", (MARGIN + 15).toFloat(), yPos.toFloat(), textPaint)
-                yPos += SMALL_LINE_HEIGHT
-            }
-
-            // ✅ SHOW ALL RECOMMENDATIONS - NO TRUNCATION
             val actions = getRecommendationActions(title)
-            actions.forEach { action ->
+            actions.take(3).forEach { action ->  // ✅ Limit to 3 top actions for space
                 val wrappedLines = wrapText("→ $action", textPaint, PAGE_WIDTH - 2 * MARGIN - 30)
                 wrappedLines.forEach { line ->
                     canvas.drawText(line, (MARGIN + 15).toFloat(), yPos.toFloat(), textPaint)
@@ -683,13 +738,12 @@ object PdfReportGenerator {
                 }
             }
 
-            yPos += 8  // Extra spacing between recommendation sections
+            yPos += 6
         }
 
         return yPos
     }
 
-    // ✅ Notes Section
     private fun drawNotesSection(canvas: Canvas, notes: String, startY: Int): Int {
         var yPos = startY
         val paint = Paint().apply {
@@ -706,12 +760,12 @@ object PdfReportGenerator {
         return yPos
     }
 
-    // ✅ UPDATED: Image Page with location name and image filename
+    // ✅ UPDATED: Image Page with 4:3 aspect ratio
     private fun drawImagePage(
         canvas: Canvas,
         imageUrl: String,
-        imageName: String,
         areaName: String,
+        locationName: String,
         imageNumber: Int,
         totalImages: Int,
         context: Context
@@ -748,27 +802,53 @@ object PdfReportGenerator {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 color = android.graphics.Color.parseColor("#0288D1")
             }
+            val labelPaint = Paint().apply {
+                textSize = 10f
+                color = android.graphics.Color.GRAY
+            }
 
             // Page number
             canvas.drawText("Analyzed Image $imageNumber of $totalImages", MARGIN.toFloat(), 50f, titlePaint)
-            drawLogo(canvas, context)  // ✅ ADD LOGO HERE
+            drawLogo(canvas, context)
 
-            // ✅ Area name and image filename
-            canvas.drawText("📍 $areaName - $imageName", MARGIN.toFloat(), 70f, metadataPaint)
+            // ✅ Area name
+            var yPos = 70
+            canvas.drawText("📍 Area: $areaName", MARGIN.toFloat(), yPos.toFloat(), metadataPaint)
+            yPos += 20
 
+            // ✅ Location name (if available)
+            if (locationName.isNotEmpty()) {
+                canvas.drawText("📌 Location: $locationName", MARGIN.toFloat(), yPos.toFloat(), metadataPaint)
+                yPos += 20
+            }
+
+            // ✅ Image number
+            canvas.drawText("Image $imageNumber", MARGIN.toFloat(), yPos.toFloat(), labelPaint)
+            yPos += 25
+
+            // ✅ 4:3 aspect ratio calculation
             val maxWidth = PAGE_WIDTH - 2 * MARGIN
-            val maxHeight = PAGE_HEIGHT - 150
+            val maxHeight = PAGE_HEIGHT - yPos - MARGIN - 20
 
-            val scaleFactor = minOf(
-                maxWidth.toFloat() / bitmap.width,
-                maxHeight.toFloat() / bitmap.height
-            )
+            val scaleFactor = if (bitmap.width > bitmap.height) {
+                // Landscape or square (assume 4:3 captured)
+                minOf(
+                    maxWidth.toFloat() / bitmap.width,
+                    maxHeight.toFloat() / bitmap.height
+                )
+            } else {
+                // Portrait
+                minOf(
+                    maxWidth.toFloat() / bitmap.width,
+                    maxHeight.toFloat() / bitmap.height
+                )
+            }
 
             val scaledWidth = (bitmap.width * scaleFactor).toInt()
             val scaledHeight = (bitmap.height * scaleFactor).toInt()
 
             val left = (PAGE_WIDTH - scaledWidth) / 2
-            val top = 95
+            val top = yPos.toInt()
 
             val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
             canvas.drawBitmap(scaledBitmap, left.toFloat(), top.toFloat(), null)
@@ -799,7 +879,6 @@ object PdfReportGenerator {
                 "Professional will: remove damaged concrete, clean metal bars, fill with repair cement",
                 "After repair: seal the surface to protect it from water and prevent future damage"
             )
-
             "Large Cracks" -> listOf(
                 "Contact a structural engineer or building expert within 1-2 weeks",
                 "Put markers on both sides of the crack to see if it's getting bigger",
@@ -811,7 +890,6 @@ object PdfReportGenerator {
                 "Fix the root cause: improve drainage, stabilize foundation, or reduce soil pressure",
                 "Seal the crack after repair to keep water out and prevent freeze damage"
             )
-
             "Hairline Cracks" -> listOf(
                 "Check these cracks once or twice a year during regular building inspections",
                 "Watch if the crack gets bigger over 6-12 months - mark the ends and take photos",
@@ -822,7 +900,6 @@ object PdfReportGenerator {
                 "Keep notes and photos of where the crack is and what it looks like",
                 "No need to worry - these small cracks are normal in concrete and brick buildings"
             )
-
             "Paint Peeling" -> listOf(
                 "Plan to repaint within 12-24 months during regular maintenance",
                 "Find and fix the water problem FIRST: look for leaks, bad drainage, or humidity",
@@ -835,7 +912,6 @@ object PdfReportGenerator {
                 "Seal gaps and joints with good quality sealant after painting",
                 "This is a cosmetic issue - no safety concerns, just maintenance needed"
             )
-
             "Algae/Moss Growth" -> listOf(
                 "Clean the area within 1-2 months using algae remover or cleaning solution",
                 "Cleaning: gently wash with garden hose and soft brush - avoid pressure washer",
@@ -848,7 +924,6 @@ object PdfReportGenerator {
                 "Check again in 6-12 months to make sure the moisture problem is fixed",
                 "If algae keeps coming back, apply breathable, water-repellent coating"
             )
-
             else -> listOf(
                 "Continue regular maintenance schedule (annual or bi-annual inspections)",
                 "Monitor during routine inspections for any emerging issues",

@@ -287,22 +287,22 @@ fun AreaInstructionDialog(onDismiss: () -> Unit) {
                 Icon(
                     Icons.Default.Info,
                     contentDescription = "Instructions",
-                    tint = Color(0xFF2563EB), // Changed to blue
+                    tint = Color(0xFF2563EB),
                     modifier = Modifier.size(48.dp)
                 )
-
                 Text(
-                    "Organize by Building Areas",
+                    text = "Organize by Building Areas",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2563EB), // Changed title to blue
+                    color = Color(0xFF2563EB),
                     textAlign = TextAlign.Center
                 )
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     AreaInstructionItem(
                         icon = Icons.Default.Add,
-                        text = "Create different areas of your building (e.g., Front Porch, Roof)"
+                        text = "Create different areas of your building e.g., Front Porch, Roof"
                     )
                     AreaInstructionItem(
                         icon = Icons.Default.CameraAlt,
@@ -312,23 +312,32 @@ fun AreaInstructionDialog(onDismiss: () -> Unit) {
                         icon = Icons.Default.Architecture,
                         text = "Optional: Turn on tilt check to detect slanted walls or uneven floors"
                     )
+                    // NEW DISCLAIMER ITEM - ADD THIS
+                    AreaInstructionItem(
+                        icon = Icons.Default.Warning,
+                        text = "IMPORTANT: Create ALL areas of your home/structure so the overall building can be evaluated properly. Every area is checked for comprehensive analysis."
+                    )
                     AreaInstructionItem(
                         icon = Icons.Default.Check,
                         text = "Review all areas before proceeding to building info"
                     )
                 }
-
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
-                    Text("Got it!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Got it!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
     }
 }
+
 
 // ✅ UPDATED: Instruction Item with blue icons
 @Composable

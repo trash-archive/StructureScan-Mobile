@@ -54,7 +54,7 @@ import java.util.*
 fun CameraCaptureScreen(
     areaName: String,
     existingPhotos: List<PhotoMetadata> = emptyList(),
-    onPhotosSubmitted: (List<PhotoMetadata>, List<PhotoMetadata>) -> Unit,  // ✅ NEW: returns new photos AND deleted photos
+    onPhotosSubmitted: (List<PhotoMetadata>, List<PhotoMetadata>) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -66,9 +66,8 @@ fun CameraCaptureScreen(
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
 
-    // ✅ Initialize with existing photos
     var capturedPhotos by remember { mutableStateOf(existingPhotos) }
-    var deletedPhotos by remember { mutableStateOf<List<PhotoMetadata>>(emptyList()) }  // ✅ NEW: Track deletions
+    var deletedPhotos by remember { mutableStateOf<List<PhotoMetadata>>(emptyList()) }
     var showGallery by remember { mutableStateOf(false) }
 
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -76,6 +75,9 @@ fun CameraCaptureScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     var photoToDelete by remember { mutableStateOf<PhotoMetadata?>(null) }
+
+    // Help dialog state
+    var showHelpDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -93,12 +95,10 @@ fun CameraCaptureScreen(
                     showDeleteDialog = true
                 },
                 onSubmitPhotos = {
-                    // ✅ UPDATED: Submit new photos and deleted photos
                     val newPhotos = capturedPhotos.filterNot { it in existingPhotos }
                     onPhotosSubmitted(newPhotos, deletedPhotos)
                 },
                 onClearAll = {
-                    // ✅ UPDATED: Mark all existing photos as deleted
                     deletedPhotos = existingPhotos
                     capturedPhotos = emptyList()
                     showGallery = false
@@ -125,7 +125,7 @@ fun CameraCaptureScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Top bar
+            // Top bar with info icon
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -158,11 +158,16 @@ fun CameraCaptureScreen(
                     }
                 }
 
-                // Placeholder for symmetry
-                Spacer(modifier = Modifier.width(48.dp))
+                IconButton(onClick = { showHelpDialog = true }) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "How this camera works",
+                        tint = Color.White
+                    )
+                }
             }
 
-            // ✅ Bottom controls
+            // Bottom controls
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -175,7 +180,7 @@ fun CameraCaptureScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // ✅ Gallery button (bottom left)
+                    // Gallery button
                     if (capturedPhotos.isNotEmpty()) {
                         FloatingActionButton(
                             onClick = { showGallery = true },
@@ -190,7 +195,6 @@ fun CameraCaptureScreen(
                                     tint = Color.Black,
                                     modifier = Modifier.size(24.dp)
                                 )
-                                // Badge
                                 Surface(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
@@ -212,7 +216,7 @@ fun CameraCaptureScreen(
                         Spacer(modifier = Modifier.size(56.dp))
                     }
 
-                    // ✅ Capture button (center)
+                    // Capture button
                     FloatingActionButton(
                         onClick = {
                             if (isCapturing) return@FloatingActionButton
@@ -272,7 +276,7 @@ fun CameraCaptureScreen(
                         }
                     }
 
-                    // ✅ UPDATED: Save/Submit button - show if there are new photos OR deletions
+                    // Save/submit button
                     if (capturedPhotos.size > existingPhotos.size || deletedPhotos.isNotEmpty()) {
                         FloatingActionButton(
                             onClick = {
@@ -320,7 +324,7 @@ fun CameraCaptureScreen(
         )
     }
 
-    // ✅ UPDATED: Delete confirmation dialog
+    // Delete confirmation dialog
     if (showDeleteDialog && photoToDelete != null) {
         AlertDialog(
             onDismissRequest = {
@@ -350,7 +354,6 @@ fun CameraCaptureScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        // ✅ NEW: Track if it's an existing photo being deleted
                         if (photoToDelete in existingPhotos) {
                             deletedPhotos = deletedPhotos + photoToDelete!!
                         }
@@ -375,9 +378,46 @@ fun CameraCaptureScreen(
             }
         )
     }
+
+    // Help dialog
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFF2563EB),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = { Text("Area Photo Capture", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Use this camera to capture photos for the \"$areaName\" area so StructureScan can score its structural risk."
+                    )
+                    Text("Tips:", fontWeight = FontWeight.SemiBold)
+                    Text("• Take at least 3–7 clear photos of this area from different angles.")
+                    Text("• Include wide shots of the whole wall/element and close‑ups of visible damage.")
+                    Text("• Hold the phone as level as possible so tilt and risk scoring stay accurate.")
+                    Text(
+                        "These photos are combined with AI and Quick Tilt to classify this area as MINOR, MODERATE, or SEVERE and feed into the overall building status.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6B7280)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHelpDialog = false }) {
+                    Text("Got it")
+                }
+            }
+        )
+    }
 }
 
-// ✅ Photo Gallery View
+// Photo Gallery View
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotoGalleryView(
@@ -446,7 +486,6 @@ fun PhotoGalleryView(
             }
         },
         bottomBar = {
-            // ✅ UPDATED: Always show save button when there are photos
             if (photos.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -481,7 +520,6 @@ fun PhotoGalleryView(
         }
     ) { paddingValues ->
         if (photos.isEmpty()) {
-            // Empty state
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -515,7 +553,6 @@ fun PhotoGalleryView(
                 }
             }
         } else {
-            // Photo grid
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
@@ -537,7 +574,6 @@ fun PhotoGalleryView(
         }
     }
 
-    // Clear all confirmation dialog
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
@@ -582,7 +618,6 @@ fun PhotoGalleryView(
         )
     }
 
-    // Photo detail view dialog
     if (selectedPhoto != null) {
         Dialog(onDismissRequest = { selectedPhoto = null }) {
             Card(
@@ -591,7 +626,6 @@ fun PhotoGalleryView(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    // Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -609,7 +643,6 @@ fun PhotoGalleryView(
                         }
                     }
 
-                    // Photo
                     AsyncImage(
                         model = selectedPhoto!!.uri,
                         contentDescription = "Photo",
@@ -620,7 +653,6 @@ fun PhotoGalleryView(
                         contentScale = ContentScale.Fit
                     )
 
-                    // Details
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
@@ -666,7 +698,6 @@ fun PhotoGalleryView(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // Delete button
                         OutlinedButton(
                             onClick = {
                                 onDeletePhoto(selectedPhoto!!)
@@ -693,7 +724,7 @@ fun PhotoGalleryView(
     }
 }
 
-// ✅ Photo Grid Item
+// Photo Grid Item
 @Composable
 fun PhotoGridItem(
     photo: PhotoMetadata,
@@ -716,7 +747,6 @@ fun PhotoGridItem(
                 contentScale = ContentScale.Crop
             )
 
-            // Delete button overlay
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier
@@ -733,7 +763,6 @@ fun PhotoGridItem(
                 )
             }
 
-            // Location name badge
             if (photo.locationName.isNotEmpty()) {
                 Surface(
                     modifier = Modifier

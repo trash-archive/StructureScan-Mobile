@@ -256,6 +256,7 @@ class AssessmentResultsActivity : ComponentActivity() {
                     footprintArea = _footprintArea.value,
                     typeOfConstruction = _typeOfConstruction.value,
                     assessmentId = currentAssessmentId,
+                    onDownloadPdf = { downloadPdfReport() },  // Pass the function
                     initialHasReanalyzed = hasUsedReanalysis,
                     onSaveToFirebase = { summary, isReanalysis ->
                         saveAssessmentToFirebase(
@@ -356,6 +357,13 @@ class AssessmentResultsActivity : ComponentActivity() {
         return try {
             // ✅ FIXED: Use the isReanalysis parameter passed from the function
             val isActualReanalysis = isReanalysis && currentAssessmentId != null
+
+            // Safety net: if we already have an ID and this is not a re-analysis,
+            // do NOT create another assessment document.
+            if (!isActualReanalysis && currentAssessmentId != null) {
+                Log.d("FirebaseSave", "Skipping duplicate initial save for $currentAssessmentId")
+                return true
+            }
 
             val assessmentId = if (isActualReanalysis) {
                 currentAssessmentId!!
@@ -668,7 +676,7 @@ class AssessmentResultsActivity : ComponentActivity() {
             areaAnalysis.imageAssessments.mapIndexed { index, imageAssessment ->
                 ImageDetail(
                     imageUrl = imageAssessment.imageUri.toString(),
-                    imageName = "Image_${index + 1}",
+                    locationName = "Image_${index + 1}",
                     areaName = areaAnalysis.areaName
                 )
             }
@@ -724,6 +732,199 @@ class AssessmentResultsActivity : ComponentActivity() {
             0
         }
     }
+
+    // Add this function to AssessmentResultsActivity class
+// ADD THIS ENTIRE FUNCTION TO AssessmentResultsActivity class (around line 500-600)
+    suspend fun loadAssessmentDataFromFirebase(assessmentId: String): PdfAssessmentData? {
+        return try {
+            val userId = firebaseAuth.currentUser?.uid ?: return null
+            val docRef = firestore.collection("users")
+                .document(userId)
+                .collection("assessments")
+                .document(assessmentId)
+
+            val document = docRef.get().await()
+
+            if (!document.exists()) {
+                Log.w("LoadAssessment", "Document not found: $assessmentId")
+                return null
+            }
+
+            // Extract areas data
+            val areasRaw = document.get("areas") as? List<HashMap<String, Any>> ?: emptyList()
+
+            // Build AreaSummary list
+            val areasData = areasRaw.map { areaMap ->
+                val imagesList = areaMap["images"] as? List<*> ?: emptyList<Any>()
+                val detectedIssuesList = mutableListOf<String>()
+
+                imagesList.forEach { imgItem ->
+                    if (imgItem is Map<*, *>) {
+                        val issues = imgItem["detectedIssues"] as? List<*> ?: emptyList<Any>()
+                        issues.forEach { issueItem ->
+                            if (issueItem is Map<*, *>) {
+                                val type = issueItem["type"] as? String ?: "Unknown"
+                                val level = issueItem["level"] as? String ?: ""
+                                detectedIssuesList.add("$type ($level)".trim())
+                            }
+                        }
+                    }
+                }
+
+                AreaSummary(
+                    areaName = areaMap["areaName"] as? String ?: "Unknown Area",
+                    areaRisk = areaMap["areaRisk"] as? String ?: "Low Risk",
+                    avgRiskPoints = (areaMap["avgRiskPoints"] as? Number)?.toFloat() ?: 0f,
+                    imageCount = imagesList.size,
+                    structuralAnalysisEnabled = areaMap["structuralAnalysisEnabled"] as? Boolean ?: false,
+                    detectedIssues = detectedIssuesList.distinct(),
+                    maxTiltAngle = null,
+                    maxTiltSeverity = null
+                )
+            }
+
+            // Build ImageDetail list (THIS IS WHAT MAKES THE 2MB PDF)
+            val imageDetails = mutableListOf<ImageDetail>()
+            areasRaw.forEachIndexed { areaIndex, areaMap ->
+                val imagesList = areaMap["images"] as? List<*> ?: emptyList<Any>()
+                imagesList.forEachIndexed { imgIndex, imgItem ->
+                    if (imgItem is Map<*, *>) {
+                        val imageUrl = imgItem["imageUri"] as? String ?: ""
+                        val locationName = imgItem["locationName"] as? String ?: ""
+                        val areaName = areaMap["areaName"] as? String ?: "Area ${areaIndex + 1}"
+
+                        if (imageUrl.isNotEmpty()) {
+                            imageDetails.add(
+                                ImageDetail(
+                                    imageUrl = imageUrl,
+                                    areaName = areaName,
+                                    locationName = locationName,
+                                    imageNumber = imgIndex + 1,
+                                    totalImages = imagesList.size
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Count damage types from Firestore
+            var crackHighCount = 0
+            var crackModerateCount = 0
+            var crackLowCount = 0
+            var paintCount = 0
+            var algaeCount = 0
+
+            areasRaw.forEach { areaMap ->
+                val imagesList = areaMap["images"] as? List<*> ?: emptyList<Any>()
+                imagesList.forEach { imgItem ->
+                    if (imgItem is Map<*, *>) {
+                        val issues = imgItem["detectedIssues"] as? List<*> ?: emptyList<Any>()
+                        issues.forEach { issueItem ->
+                            if (issueItem is Map<*, *>) {
+                                val type = (issueItem["type"] as? String ?: "").lowercase()
+                                val level = issueItem["level"] as? String ?: ""
+
+                                when {
+                                    type.contains("spalling") -> crackHighCount++
+                                    type.contains("crack") && level == "High" -> crackHighCount++
+                                    type.contains("crack") && level == "Moderate" -> crackModerateCount++
+                                    type.contains("crack") && level == "Low" -> crackLowCount++
+                                    type.contains("paint") -> paintCount++
+                                    type.contains("algae") -> algaeCount++
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Build complete PDF data
+            PdfAssessmentData(
+                assessmentName = document.getString("assessmentName") ?: "Assessment",
+                date = document.getString("date") ?: "",
+                overallRisk = document.getString("overallRisk") ?: "INSPECTED",
+                totalIssues = document.getLong("totalIssues")?.toInt() ?: 0,
+                crackHighCount = crackHighCount,
+                crackModerateCount = crackModerateCount,
+                crackLowCount = crackLowCount,
+                paintCount = paintCount,
+                algaeCount = algaeCount,
+                buildingType = document.getString("buildingType") ?: "",
+                constructionYear = document.getString("constructionYear") ?: "",
+                renovationYear = document.getString("renovationYear") ?: "",
+                floors = document.getString("floors") ?: "",
+                material = document.getString("material") ?: "",
+                foundation = document.getString("foundation") ?: "",
+                environment = document.getString("environment") ?: "",
+                previousIssues = (document.get("previousIssues") as? List<*>)?.joinToString(", ") ?: "",
+                occupancy = document.getString("occupancy") ?: "",
+                environmentalRisks = (document.get("environmentalRisks") as? List<*>)?.joinToString(", ") ?: "",
+                notes = document.getString("notes") ?: "",
+                address = document.getString("address") ?: "",
+                footprintArea = document.getString("footprintArea") ?: "",
+                typeOfConstruction = document.getString("typeOfConstruction") ?: "",
+                areasData = areasData,
+                imageDetails = imageDetails
+            )
+
+        } catch (e: Exception) {
+            Log.e("LoadAssessment", "Error loading from Firestore", e)
+            null
+        }
+    }
+
+    // ADD THIS FUNCTION (right after the loadAssessmentDataFromFirebase function)
+    fun downloadPdfReport() {
+        val assessmentId = currentAssessmentId
+        if (assessmentId.isNullOrEmpty()) {
+            Toast.makeText(this, "No assessment ID found", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Show loading dialog
+        val loadingDialog = android.app.AlertDialog.Builder(this)
+            .setTitle("Generating PDF...")
+            .setMessage("Loading assessment data and images...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
+
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob()).launch {
+            try {
+                // Load real data from Firestore
+                val pdfData = loadAssessmentDataFromFirebase(assessmentId)
+
+                loadingDialog.dismiss()
+
+                if (pdfData != null) {
+                    Log.d("PDFDownload", "✅ Loaded: ${pdfData.imageDetails.size} images, ${pdfData.areasData.size} areas")
+
+                    // Generate PDF
+                    val pdfPath = PdfReportGenerator.generatePdfReport(this@AssessmentResultsActivity, pdfData)
+
+                    if (pdfPath != null) {
+                        val fileSizeKB = java.io.File(pdfPath).length() / 1024
+                        Toast.makeText(
+                            this@AssessmentResultsActivity,
+                            "PDF saved to downloads! (${fileSizeKB}KB with ${pdfData.imageDetails.size} images)",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        Log.d("PDFDownload", "SUCCESS: $pdfPath (${fileSizeKB}KB)")
+                    } else {
+                        Toast.makeText(this@AssessmentResultsActivity, "❌ Failed to generate PDF", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(this@AssessmentResultsActivity, "❌ No assessment data found", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                loadingDialog.dismiss()
+                Log.e("PDFDownload", "Error", e)
+                Toast.makeText(this@AssessmentResultsActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
 
     fun getRecommendation(damageType: String, damageLevel: String): DamageRecommendation {
         val key = "$damageType-$damageLevel"
@@ -841,6 +1042,7 @@ fun AssessmentResultsScreen(
     typeOfConstruction: List<String> = emptyList(),
 
     assessmentId: String? = null, // NEW: Receive assessment ID
+    onDownloadPdf: () -> Unit = {},  // Download callback
     initialHasReanalyzed: Boolean = false, // NEW: Receive re-analysis state
     onSaveToFirebase: (AssessmentSummary, Boolean) -> Boolean = { _, _ -> false },
     onReanalyze: () -> Unit = {},
@@ -850,20 +1052,6 @@ fun AssessmentResultsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val activity = context as? AssessmentResultsActivity
-
-    //var currentBuildingType by remember { mutableStateOf(buildingType) }
-    //var currentConstructionYear by remember { mutableStateOf(constructionYear) }
-   // var currentRenovationYear by remember { mutableStateOf(renovationYear) }
-    //var currentFloors by remember { mutableStateOf(floors) }
-   // var currentMaterial by remember { mutableStateOf(material) }
-   // var currentFoundation by remember { mutableStateOf(foundation) }
-   // var currentEnvironment by remember { mutableStateOf(environment) }
-   // var currentPreviousIssues by remember { mutableStateOf(previousIssues) }
-    //var currentOccupancy by remember { mutableStateOf(occupancy) }
-    //var currentEnvironmentalRisks by remember { mutableStateOf(environmentalRisks) }
-    //var currentNotes by remember { mutableStateOf(notes) }
-    //var currentAssessmentName by remember { mutableStateOf(assessmentName) }
-
     var isAnalyzing by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var isReanalyzing by remember { mutableStateOf(false) }
@@ -875,23 +1063,7 @@ fun AssessmentResultsScreen(
     var loadingMessage by remember { mutableStateOf("Analyzing images, please wait...") }
     var allImagesCount by remember { mutableStateOf(0) }
 
-    val SHOW_THRESHOLD = 0.50f
-
-    // NEW: Update building info when intent changes
-    //LaunchedEffect(buildingType, constructionYear, renovationYear, floors, material, foundation, environment, previousIssues, occupancy, environmentalRisks, notes, assessmentName) {
-       // currentBuildingType = buildingType
-       // currentConstructionYear = constructionYear
-        //currentRenovationYear = renovationYear
-       // currentFloors = floors
-       // currentMaterial = material
-       // currentFoundation = foundation
-       // currentEnvironment = environment
-       // currentPreviousIssues = previousIssues
-        //currentOccupancy = occupancy
-        //currentEnvironmentalRisks = environmentalRisks
-      //  currentNotes = notes
-       // currentAssessmentName = assessmentName
-  //  }
+    val SHOW_THRESHOLD = 0.01f
 
     BackHandler(enabled = true) {
         if (isSaving || isReanalyzing) {
@@ -1076,8 +1248,8 @@ fun AssessmentResultsScreen(
 
                 val areaRisk = when {
                     imageCount < 3 -> "INSUFFICIENT"
-                    avgPoints >= 2.0f -> "SEVERE"
-                    avgPoints >= 1.0f -> "MODERATE"
+                    avgPoints >= 3.0f -> "SEVERE"
+                    avgPoints >= 2.0f -> "MODERATE"
                     else -> "MINOR"
                 }
 
@@ -1162,13 +1334,21 @@ fun AssessmentResultsScreen(
     }
 
     LaunchedEffect(Unit) {
-        // ✅ ADD THIS CHECK FIRST
-        if (assessmentSummary != null || assessmentId != null) {
-            isSavedToFirebase = true  // Skip analysis if already done
+        // 1) If we already have a summary in memory, never re-analyze.
+        if (assessmentSummary != null) {
+            isSavedToFirebase = true
             return@LaunchedEffect
         }
+
+        // 2) If this assessment already exists in Firestore, do not auto-analyze.
+        if (assessmentId != null) {
+            // Later you can load summary from Firestore here.
+            isSavedToFirebase = true
+            return@LaunchedEffect
+        }
+
+        // 3) New assessment: run analysis + initial save ONCE.
         if (buildingAreas.isNotEmpty() && !isSavedToFirebase) {
-            // Only analyze if this is a NEW assessment (no ID yet)
             isAnalyzing = true
             isSaving = true
             analysisError = null
@@ -1201,7 +1381,6 @@ fun AssessmentResultsScreen(
                         avgPoints >= 1.0f -> "MODERATE"
                         else -> "MINOR"
                     }
-
 
                     areaAnalysesList.add(
                         AreaAnalysis(
@@ -1242,7 +1421,6 @@ fun AssessmentResultsScreen(
                     else -> "INSPECTED"
                 }
 
-
                 val totalIssues = detectionSummary.sumOf { it.count }
 
                 val summary = AssessmentSummary(
@@ -1262,7 +1440,7 @@ fun AssessmentResultsScreen(
                         isSaving = false
 
                         if (success) {
-                            assessmentSummary = summary
+                            assessmentSummary = summary              // mark as computed
                             isSavedToFirebase = true
                             allImagesCount = summary.areaAnalyses.sumOf { it.imageAssessments.size }
                         } else {
@@ -1276,9 +1454,6 @@ fun AssessmentResultsScreen(
                 isAnalyzing = false
                 isSaving = false
             }
-        } else if (assessmentId != null) {
-            // Assessment already exists - just mark as saved
-            isSavedToFirebase = true
         }
     }
 
@@ -2362,59 +2537,6 @@ fun AssessmentResultsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Download Button
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    // ✅ PASTE THIS ENTIRE onClick:
-                                    try {
-                                        if (assessmentSummary == null) {
-                                            Toast.makeText(context, "❌ Wait for analysis to finish first!\n(See green checkmarks)", Toast.LENGTH_LONG).show()
-                                            return@launch
-                                        }
-
-                                        val activity = context as? AssessmentResultsActivity
-                                        val pdfData = activity?.generatePdfWithAllData()
-
-                                        if (pdfData != null) {
-                                            val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
-                                            if (pdfPath != null) {
-                                                Toast.makeText(context, "PDF saved to Downloads!", Toast.LENGTH_LONG).show()
-                                            } else {
-                                                Toast.makeText(context, "Failed to generate PDF", Toast.LENGTH_SHORT).show()
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "Complete analysis first", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(vertical = 14.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "Download Full Report (PDF)",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
                         // Back to Dashboard Button
                         OutlinedButton(
                             onClick = {
@@ -2634,7 +2756,7 @@ fun StructuralTiltSummaryCard(summary: AssessmentSummary) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "Wall & Floor Tilt Check",  // ✅ USER-FRIENDLY TITLE
+                        text = "Structural Tilt Check",  // ✅ USER-FRIENDLY TITLE
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.Black

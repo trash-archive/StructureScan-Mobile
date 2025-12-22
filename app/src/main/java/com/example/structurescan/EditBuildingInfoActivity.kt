@@ -234,7 +234,7 @@ class EditBuildingInfoActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         this@EditBuildingInfoActivity,
-                        "✓ Assessment deleted successfully",
+                        "Assessment deleted successfully",
                         Toast.LENGTH_SHORT
                     ).show()
 

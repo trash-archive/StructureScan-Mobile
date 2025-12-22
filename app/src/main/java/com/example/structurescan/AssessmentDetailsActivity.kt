@@ -407,6 +407,8 @@ fun AssessmentDetailsScreen(
     var showImageViewer by remember { mutableStateOf(false) }
     var overallRisk by remember { mutableStateOf("Low Risk") }
     var totalIssues by remember { mutableStateOf(0) }
+    var showPdfLoading by remember { mutableStateOf(false) }
+    var pdfProgress by remember { mutableStateOf("Generating PDF...") }
 
     LaunchedEffect(assessmentId) {
         if (assessmentId.isNotEmpty()) {
@@ -512,6 +514,102 @@ fun AssessmentDetailsScreen(
                     areaRisk = areaRisk,
                     avgRiskPoints = avgPoints
                 )
+            }
+        }
+    }
+
+    // ✅ PDF LOADING LOGIC
+    LaunchedEffect(showPdfLoading) {
+        if (showPdfLoading && areaData.isNotEmpty()) {
+            try {
+                pdfProgress = "Collecting assessment data..."
+
+                val totalImages = areaData.sumOf { it.images.size }
+                pdfProgress = "Processing $totalImages images..."
+
+                val allImages = areaData.flatMap { it.images }
+                val allDetectedIssues = allImages.flatMap { it.detectedIssues }
+
+                pdfProgress = "Building report structure..."
+                val imageDetails = allImages.mapIndexed { index, image ->
+                    ImageDetail(
+                        imageUrl = image.imageUrl,
+                        areaName = areaData.find { it.images.any { img -> img.imageUrl == image.imageUrl } }?.areaName ?: "Assessment Image",
+                        locationName = image.locationName.ifEmpty { "Image ${index + 1}" },
+                        imageNumber = index + 1,
+                        totalImages = allImages.size
+                    )
+                }
+
+                pdfProgress = "Analyzing damage types..."
+                val areasData = areaData.map { area ->
+                    AreaSummary(
+                        areaName = area.areaName,
+                        areaRisk = area.areaRisk,
+                        avgRiskPoints = area.avgRiskPoints,
+                        imageCount = area.images.size,
+                        structuralAnalysisEnabled = area.structuralAnalysisEnabled,
+                        detectedIssues = area.images.flatMap { it.detectedIssues }.map { it.damageType },
+                        maxTiltAngle = area.images.mapNotNull { it.structuralVerticalTilt }.maxOrNull(),
+                        maxTiltSeverity = area.images.mapNotNull { it.structuralTiltSeverity }.maxByOrNull { it }
+                    )
+                }
+
+                var crackHighCount = allDetectedIssues.count {
+                    it.damageType.contains("Spalling", ignoreCase = true) ||
+                            (it.damageType.contains("Crack", ignoreCase = true) && it.damageLevel == "High")
+                }
+                var crackModerateCount = allDetectedIssues.count {
+                    it.damageType.contains("Crack", ignoreCase = true) && it.damageLevel == "Moderate"
+                }
+                var crackLowCount = allDetectedIssues.count {
+                    it.damageType.contains("Crack", ignoreCase = true) && it.damageLevel == "Low"
+                }
+                var paintCount = allDetectedIssues.count { it.damageType.contains("Paint", ignoreCase = true) }
+                var algaeCount = allDetectedIssues.count { it.damageType.contains("Algae", ignoreCase = true) }
+
+                pdfProgress = "Generating PDF pages..."
+                val pdfData = PdfAssessmentData(
+                    assessmentName = title,
+                    date = date,
+                    overallRisk = overallRisk,
+                    totalIssues = totalIssues,
+                    crackHighCount = crackHighCount,
+                    crackModerateCount = crackModerateCount,
+                    crackLowCount = crackLowCount,
+                    paintCount = paintCount,
+                    algaeCount = algaeCount,
+                    buildingType = buildingType,
+                    constructionYear = constructionYear,
+                    renovationYear = renovationYear,
+                    floors = floors,
+                    material = material,
+                    foundation = foundation,
+                    environment = environment,
+                    previousIssues = previousIssues.joinToString(", "),
+                    occupancy = occupancy,
+                    environmentalRisks = environmentalRisks.joinToString(", "),
+                    notes = notes,
+                    address = address,
+                    footprintArea = footprintArea,
+                    typeOfConstruction = typeOfConstruction.joinToString(", "),
+                    areasData = areasData,
+                    imageDetails = imageDetails
+                )
+
+                val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
+
+                pdfProgress = "PDF saved successfully!"
+                kotlinx.coroutines.delay(1000)
+                showPdfLoading = false
+                Toast.makeText(context, "PDF saved to Downloads!", Toast.LENGTH_LONG).show()
+
+            } catch (e: Exception) {
+                pdfProgress = "Error occurred"
+                kotlinx.coroutines.delay(1500)
+                showPdfLoading = false
+                Toast.makeText(context, "❌ Error: ${e.message}", Toast.LENGTH_LONG).show()
+                Log.e("PDF_ERROR", "PDF generation failed", e)
             }
         }
     }
@@ -865,7 +963,7 @@ fun AssessmentDetailsScreen(
                             Spacer(Modifier.width(12.dp))
 
                             Text(
-                                text = "Wall & Floor Tilt Check",
+                                text = "Structural Tilt Check",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.Black
@@ -1102,29 +1200,66 @@ fun AssessmentDetailsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // ✅ DOWNLOAD BUTTON
                     OutlinedButton(
-                        onClick = { showDownloadDialog = true },
+                        onClick = { showPdfLoading = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, Color(0xFF2196F3)),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF2196F3)
-                        )
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF2196F3))
                     ) {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Download",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Download PDF Report", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
+
+// ✅ LOADING DIALOG - Add this right after the button
+                    if (showPdfLoading) {
+                        Dialog(
+                            onDismissRequest = { /* Block dismiss during PDF */ }
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    // Progress Circle
+                                    CircularProgressIndicator(
+                                        color = Color(0xFF2196F3),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+
+                                    // Progress Text
+                                    Text(
+                                        text = pdfProgress,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Black
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "Please wait while we generate your report...",
+                                        fontSize = 14.sp,
+                                        color = Color.Gray,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+
 
                     Button(
                         onClick = {
@@ -1204,81 +1339,73 @@ fun AssessmentDetailsScreen(
             title = { Text("Download Report") },
             text = { Text("Generate and download a PDF report of this assessment?") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showDownloadDialog = false
-                        coroutineScope.launch {
-                            try {
-                                val imageUrls = allImages.map { it.imageUrl }
-                                val imageDetails = allImages.mapIndexed { index, image ->
-                                    ImageDetail(
-                                        imageUrl = image.imageUrl,
-                                        imageName = "Image_${index + 1}",
-                                        areaName = "Assessment Image"
-                                    )
-                                }
-
-                                val pdfData = PdfAssessmentData(
-                                    assessmentName = title,
-                                    date = date,
-                                    overallRisk = overallRisk,
-                                    totalIssues = totalIssues,
-                                    crackHighCount = allDetectedIssues.count {
-                                        it.damageType == "Spalling" || it.damageType == "Major Crack"
-                                    },
-                                    crackModerateCount = 0,
-                                    crackLowCount = allDetectedIssues.count {
-                                        it.damageType == "Minor Crack"
-                                    },
-                                    paintCount = allDetectedIssues.count {
-                                        it.damageType == "Paint Damage"
-                                    },
-                                    algaeCount = allDetectedIssues.count {
-                                        it.damageType == "Algae"
-                                    },
-                                    buildingType = buildingType,
-                                    constructionYear = constructionYear,
-                                    renovationYear = renovationYear,
-                                    floors = floors,
-                                    material = material,
-                                    foundation = foundation,
-                                    environment = environment,
-                                    previousIssues = previousIssues.joinToString(", "),
-                                    occupancy = occupancy,
-                                    environmentalRisks = environmentalRisks.joinToString(", "),
-                                    notes = notes,
-                                    address = address,                    // ✅ ADD
-                                    footprintArea = footprintArea,        // ✅ ADD
-                                    typeOfConstruction = typeOfConstruction.joinToString(", "),  // ✅ ADD
-                                    areasData = emptyList(),              // ✅ TEMP - or build from areaData
-                                    imageDetails = imageDetails           // ✅ CORRECT PARAMETER!
+                Button(onClick = {
+                    showDownloadDialog = false
+                    coroutineScope.launch {
+                        try {
+                            val imageDetails = allImages.mapIndexed { index, image ->
+                                ImageDetail(
+                                    imageUrl = image.imageUrl,
+                                    areaName = areaData.find { it.images.any { img -> img.imageUrl == image.imageUrl } }?.areaName ?: "Assessment Image",
+                                    locationName = image.locationName.ifEmpty { "Image ${index + 1}" },  // ✅ FIXED
+                                    imageNumber = index + 1,
+                                    totalImages = allImages.size
                                 )
-
-                                val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
-
-                                if (pdfPath != null) {
-                                    Toast.makeText(
-                                        context,
-                                        "PDF saved to Downloads folder!",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Failed to generate PDF",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(
-                                    context,
-                                    "Error: ${e.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
                             }
+
+                            // ✅ Build areasData from your actual areaData
+                            val areasData = areaData.map { area ->
+                                AreaSummary(
+                                    areaName = area.areaName,
+                                    areaRisk = area.areaRisk,
+                                    avgRiskPoints = area.avgRiskPoints,
+                                    imageCount = area.images.size,
+                                    structuralAnalysisEnabled = area.structuralAnalysisEnabled,
+                                    detectedIssues = area.images.flatMap { it.detectedIssues }.map { it.damageType },
+                                    maxTiltAngle = area.images.mapNotNull { it.structuralVerticalTilt }.maxOrNull(),
+                                    maxTiltSeverity = area.images.mapNotNull { it.structuralTiltSeverity }.maxByOrNull { it }
+                                )
+                            }
+
+                            val pdfData = PdfAssessmentData(
+                                assessmentName = title,
+                                date = date,
+                                overallRisk = overallRisk,
+                                totalIssues = totalIssues,
+                                crackHighCount = allDetectedIssues.count { it.damageType.contains("Spalling") || it.damageType.contains("Major Crack") },
+                                crackModerateCount = allDetectedIssues.count { it.damageType.contains("Crack") && it.damageLevel == "Moderate" },
+                                crackLowCount = allDetectedIssues.count { it.damageType.contains("Minor Crack") },
+                                paintCount = allDetectedIssues.count { it.damageType.contains("Paint") },
+                                algaeCount = allDetectedIssues.count { it.damageType.contains("Algae") },
+                                buildingType = buildingType,
+                                constructionYear = constructionYear,
+                                renovationYear = renovationYear,
+                                floors = floors,
+                                material = material,
+                                foundation = foundation,
+                                environment = environment,
+                                previousIssues = previousIssues.joinToString(", "),
+                                occupancy = occupancy,
+                                environmentalRisks = environmentalRisks.joinToString(", "),
+                                notes = notes,
+                                address = address,
+                                footprintArea = footprintArea,
+                                typeOfConstruction = typeOfConstruction.joinToString(", "),
+                                areasData = areasData,
+                                imageDetails = imageDetails
+                            )
+
+                            val pdfPath = PdfReportGenerator.generatePdfReport(context, pdfData)
+                            if (pdfPath != null) {
+                                Toast.makeText(context, "PDF saved to Downloads folder!", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "Failed to generate PDF", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
-                ) {
+                }) {
                     Text("Download")
                 }
             },

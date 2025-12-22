@@ -105,4 +105,6 @@ dependencies {
 
     // ✅ OpenCV for Android (Maven Central - version 4.9.0+)
     implementation("org.opencv:opencv:4.10.0")
+
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

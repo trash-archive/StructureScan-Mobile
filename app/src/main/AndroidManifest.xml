@@ -97,6 +97,22 @@
             android:exported="false"
             android:screenOrientation="portrait" />
         <activity
+            android:name=".QuickScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".QuickScanResultsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".QuickTiltAnalysisActivity"
+            android:exported="false"
+            android:theme="@style/Theme.StructureScan" />
+        <activity
+            android:name=".QuickTiltResultActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".ScanActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
